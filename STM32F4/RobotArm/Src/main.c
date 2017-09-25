@@ -49,6 +49,7 @@
 #include "main.h"
 #include "stm32f4xx_hal.h"
 #include "cmsis_os.h"
+#include "usb_device.h"
 
 /* USER CODE BEGIN Includes */
 #include "../BSP/stm32f429i_discovery.h"
@@ -62,6 +63,8 @@ DMA2D_HandleTypeDef hdma2d;
 I2C_HandleTypeDef hi2c3;
 
 LTDC_HandleTypeDef hltdc;
+
+RNG_HandleTypeDef hrng;
 
 SPI_HandleTypeDef hspi5;
 
@@ -87,7 +90,7 @@ osThreadId tsTaskHandle;
 
 
 static volatile float servo1NewPosRef = 7.5;
-static volatile float servo2NewPosRef = 7.5;
+static volatile float servo2NewPosRef = 6.8;
 static volatile float servo3NewPosRef = 6.8;
 static volatile float servo4NewPosRef = 7.5;
 static volatile float servo5NewPosRef = 7.5;
@@ -105,24 +108,29 @@ static volatile float servo4CurrPos = 7.5;
 static volatile float servo5CurrPos = 7.5;
 
 static volatile float servo1Min = 2.5;
-static volatile float servo2Min = 6.35;
-static volatile float servo3Min = 6.8;
+static volatile float servo2Min = 6.5;
+static volatile float servo3Min = 6.3;
 static volatile float servo4Min = 5;
 static volatile float servo5Min = 5;
 
 static volatile float servo1Max = 12.5;
-static volatile float servo2Max = 10.7;
-static volatile float servo3Max = 9.25;
+static volatile float servo2Max = 10.5;
+static volatile float servo3Max = 8.3;
 static volatile float servo4Max = 10;
 static volatile float servo5Max = 10;
 
-static volatile float servo1StepSize = 0.1;
-static volatile float servo2StepSize = 0.1;
-static volatile float servo3StepSize = 0.1;
-static volatile float servo4StepSize = 0.1;
-static volatile float servo5StepSize = 0.1;
+static volatile float servo1StepSize = 0.03;
+static volatile float servo2StepSize = 0.03;
+static volatile float servo3StepSize = 0.03;
+static volatile float servo4StepSize = 0.03;
+static volatile float servo5StepSize = 0.03;
 
 static volatile int mode = 0;
+static volatile int cycleRepeat = 0;
+
+char txBuf[10];
+char rxBuf[10];
+uint8_t receiveState = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -137,6 +145,7 @@ static void MX_I2C3_Init(void);
 static void MX_LTDC_Init(void);
 static void MX_DMA2D_Init(void);
 static void MX_FMC_Init(void);
+static void MX_RNG_Init(void);
 void StartDefaultTask(void const * argument);
 void StartCommTask(void const * argument);
 void StartSensorTask(void const * argument);
@@ -151,7 +160,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-
+extern uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -192,6 +201,7 @@ int main(void)
   MX_LTDC_Init();
   MX_DMA2D_Init();
   MX_FMC_Init();
+  MX_RNG_Init();
 
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);    //servoPWM1
@@ -206,14 +216,14 @@ int main(void)
   HAL_TIMEx_PWMN_Start(&htim4, TIM_CHANNEL_2);
   
   //TIM2->CCR1 = (int)(7.5*45000/100);//7.5 = 1.5ms
-  //TIM2->CCR2 = (int)(6.35*45000/100);//10 = 2ms
-  //TIM3->CCR1 = (int)(6.8*45000/100);//5 = 1ms
+  //TIM2->CCR2 = (int)(7.5*45000/100);//10 = 2ms
+  //TIM3->CCR1 = (int)(6.3*45000/100);//5 = 1ms
   //TIM3->CCR3 = (int)(7.5*45000/100);
   //TIM4->CCR2 = (int)(7.5*45000/100);
 
   //min 2.5 max 12.5                   -->      
-  //2: 2.12 a max 1.26ms a min         -->      10.7...6.35
-  //3: 1.9 (1.85)ms max, 1.35ms a min  --> %-ban 9.25...6.8
+  //2: 2.12 a max 1.2ms a min         -->      10.5...6.5
+  //3: 1.65 ms max, 1.3ms a min  --> %-ban 8...6.3
 
   
   BSP_LED_On(LED3);
@@ -234,8 +244,12 @@ int main(void)
   BSP_LCD_SetTextColor(LCD_COLOR_CYAN);
   BSP_LCD_SetFont(&Font16);
   BSP_LCD_DrawRect(0,0,239,319);
-  BSP_LCD_DisplayStringAt(3,8,"kaki",LEFT_MODE);
+  BSP_LCD_DisplayStringAt(5,8,"Robotkar vezerles v1",LEFT_MODE);
+  BSP_LCD_SetTextColor(LCD_COLOR_RED);
+  BSP_LCD_FillCircle(120, 160, 80);
 
+  
+  BSP_LCD_SetFont(&Font24);
   //Touchscreen_Calibration();
   BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
   
@@ -322,15 +336,14 @@ void SystemClock_Config(void)
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = 16;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 50;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 7;
+  RCC_OscInitStruct.PLL.PLLN = 192;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -351,7 +364,7 @@ void SystemClock_Config(void)
   }
 
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-  PeriphClkInitStruct.PLLSAI.PLLSAIN = 50;
+  PeriphClkInitStruct.PLLSAI.PLLSAIN = 100;
   PeriphClkInitStruct.PLLSAI.PLLSAIR = 4;
   PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_4;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
@@ -485,10 +498,23 @@ static void MX_LTDC_Init(void)
 
 }
 
+/* RNG init function */
+static void MX_RNG_Init(void)
+{
+
+  hrng.Instance = RNG;
+  if (HAL_RNG_Init(&hrng) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
 /* SPI5 init function */
 static void MX_SPI5_Init(void)
 {
 
+  /* SPI5 parameter configuration*/
   hspi5.Instance = SPI5;
   hspi5.Init.Mode = SPI_MODE_MASTER;
   hspi5.Init.Direction = SPI_DIRECTION_2LINES;
@@ -518,7 +544,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 10;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 45000;
+  htim2.Init.Period = 22500;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
   {
@@ -560,7 +586,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 10;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 45000;
+  htim3.Init.Period = 22500;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
   {
@@ -602,7 +628,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 10;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 45000;
+  htim4.Init.Period = 22500;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
@@ -688,10 +714,6 @@ static void MX_FMC_Init(void)
         * Output
         * EVENT_OUT
         * EXTI
-     PB12   ------> USB_OTG_HS_ID
-     PB13   ------> USB_OTG_HS_VBUS
-     PB14   ------> USB_OTG_HS_DM
-     PB15   ------> USB_OTG_HS_DP
 */
 static void MX_GPIO_Init(void)
 {
@@ -752,20 +774,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BOOT1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : OTG_FS_ID_Pin OTG_FS_DM_Pin OTG_FS_DP_Pin */
-  GPIO_InitStruct.Pin = OTG_FS_ID_Pin|OTG_FS_DM_Pin|OTG_FS_DP_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF12_OTG_HS_FS;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : VBUS_FS_Pin */
-  GPIO_InitStruct.Pin = VBUS_FS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(VBUS_FS_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pin : TE_Pin */
   GPIO_InitStruct.Pin = TE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -795,20 +803,49 @@ void saturateFloat(volatile float* i, float min, float max) {
   else if (val > max) val = max;
   *i = val;
 }
+
+/**
+   * @brief Count characters in char array
+	 * @param ptr: pointer to char array
+   * @retval Number of characters in array
+   */
+uint16_t SizeofCharArray(char *ptr)
+{
+  /* Local variables */
+  uint16_t len = 0;
+  
+  /* Search until end char */
+  while (ptr[len] != '\0') {   
+    len++;
+  }	
+  return len;
+}
 /* USER CODE END 4 */
 
 /* StartDefaultTask function */
 void StartDefaultTask(void const * argument)
 {
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
 
   /* USER CODE BEGIN 5 */
+  int elapsedTime = 0;
   /* Infinite loop */
   for(;;)
   {
-    if (BSP_PB_GetState(BUTTON_KEY) == SET){
-      mode++;
+    if ((BSP_PB_GetState(BUTTON_KEY) == SET) && (elapsedTime > 10)){
+      //mode++;
+      //cycleRepeat = 1;
+      cycleRepeat ^= 1;
+      BSP_LCD_DisplayChar(20,30,(char)(cycleRepeat+48));
+      elapsedTime = 0;
     }
-    osDelay(300);
+    
+    if (elapsedTime < 100){
+      elapsedTime+=1;
+    }
+      
+    osDelay(100);
   }
   /* USER CODE END 5 */ 
 }
@@ -817,10 +854,26 @@ void StartDefaultTask(void const * argument)
 void StartCommTask(void const * argument)
 {
   /* USER CODE BEGIN StartCommTask */
+  //uint16_t Len = 0;
+  strcpy(txBuf, "echo:\r");
+  uint16_t servo1ComPosRef = 75;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(10);
+
+    if (receiveState == 1){
+
+      //Len = SizeofCharArray((char*)txBuf);
+      //CDC_Transmit_HS((uint8_t*)txBuf, Len);
+      
+      receiveState = 0;
+      //Len = SizeofCharArray((char*)rxBuf);
+      //CDC_Transmit_HS((uint8_t*)rxBuf, Len);
+      servo1ComPosRef = (rxBuf[0]  - '0')*10 + (rxBuf[1]  - '0')*1;
+      
+      servo1NewPosRef = servo1ComPosRef / 10.0;
+    }
+    osDelay(1000);
   }
   /* USER CODE END StartCommTask */
 }
@@ -948,7 +1001,7 @@ void StartControlTask(void const * argument)
     servo4CurrPos = servo4NewPos;
     servo5CurrPos = servo5NewPos;
     
-    osDelay(20);
+    osDelay(10);
   }
   /* USER CODE END StartControlTask */
 }
@@ -974,47 +1027,76 @@ void StartServoRampTask(void const * argument)
       taskCounter++;
       osDelay(500);
     }
-    else {
-      if (taskCounter % 7 == 0){
-        servo2NewPosRef = 6.35;
-        servo3NewPosRef = 9.25;
+    else if (cycleRepeat == 1){
+      if (taskCounter % 12 == 0){
+        servo3NewPosRef = 6.8;
         servo4NewPosRef = 6;
-        taskDelay = 3000;
-      }
-      else if (taskCounter % 7 == 1){
-        servo4NewPosRef = 9;
         taskDelay = 1000;
       }
-      else if (taskCounter % 7 == 2){
-        servo2NewPosRef = 10.7;
-        servo3NewPosRef = 6.8;
-        servo2StepSize = 0.15;
+      else if (taskCounter % 12 == 1){
+        servo2NewPosRef = 9;
+        taskDelay = 1000;
+      }
+      else if (taskCounter % 12 == 2){
+        servo1NewPosRef = 7.5;
         taskDelay = 2000;
       }
-      else if (taskCounter % 7 == 3){
+      else if (taskCounter % 12 == 3){
+        servo1NewPosRef = 3;
+        servo2NewPosRef = 6.35;
+        taskDelay = 2000;
+      }
+      else if (taskCounter % 12 == 4){
+        
+        servo3NewPosRef = 9.25;
+        taskDelay = 1500;
+      }
+      else if (taskCounter % 12 == 5){
+        servo4NewPosRef = 9.2;
+        taskDelay = 1500;
+      }
+      else if (taskCounter % 12 == 6){
+        servo1NewPosRef = 7.5;
+        servo2NewPosRef = 10.7;
+        servo3NewPosRef = 6.8;
+        servo2StepSize = 0.03;
+        servo3StepSize = 0.03;
+        taskDelay = 2500;
+      }
+      else if (taskCounter % 12 == 7){
         servo2NewPosRef = 10.7;
         servo3NewPosRef = 8;
-        servo2StepSize = 0.1;
+        servo2StepSize = 0.03;
         taskDelay = 500;
       }
-      else if (taskCounter % 7 == 4){
+      else if (taskCounter % 12 == 8){
         servo2NewPosRef = 10.7;
         servo3NewPosRef = 6.8;
         taskDelay = 1000;
       }
-      else if (taskCounter % 7 == 5){
+      else if (taskCounter % 12 == 9){
+        servo1NewPosRef = 3;
         servo2NewPosRef = 6.35;
-        servo3NewPosRef = 9.25;
-        servo2StepSize = 0.15;
+        servo2StepSize = 0.03;
         taskDelay = 2000;
       }
-      else if (taskCounter % 7 == 6){
-        servo2StepSize = 0.1;
-        taskDelay = 3000;
+      else if (taskCounter % 12 == 10){
+        servo3NewPosRef = 9.25;
+        taskDelay = 1500;
+      }
+      else if (taskCounter % 12 == 11){
+        servo2StepSize = 0.03;
+        servo4NewPosRef = 6;
+        taskDelay = 1500;
+        taskDelay = 30000;
+        //cycleRepeat = 0;
       }
       
       taskCounter++;
       osDelay(taskDelay);
+    }
+    else{
+      osDelay(500);
     }
   }
   /* USER CODE END StartServoRampTask */
@@ -1036,6 +1118,12 @@ void StartTsTask(void const * argument)
     
     if (State.TouchDetected){
       BSP_LCD_DrawCircle(x,y,3);
+      BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+      BSP_LCD_FillCircle(120, 160, 80);
+    }
+    else{
+      BSP_LCD_SetTextColor(LCD_COLOR_RED);
+      BSP_LCD_FillCircle(120, 160, 80);
     }
       
     osDelay(10);

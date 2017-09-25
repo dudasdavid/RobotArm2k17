@@ -20,7 +20,7 @@
 
 "--stlink_reset_strategy=0,0" 
 
-"--drv_swo_clock_setup=50000000,0,2000000" 
+"--drv_swo_clock_setup=48000000,0,2000000" 
 
 
 
