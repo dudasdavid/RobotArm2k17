@@ -45,6 +45,7 @@
   *
   ******************************************************************************
   */
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_hal.h"
@@ -55,6 +56,7 @@
 #include "../BSP/stm32f429i_discovery.h"
 #include "../BSP/stm32f429i_discovery_lcd.h"
 #include "../BSP/stm32f429i_discovery_ts.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -87,50 +89,80 @@ osThreadId tsTaskHandle;
 /* Private variables ---------------------------------------------------------*/
 #define LCD_FRAME_BUFFER_LAYER0                  (LCD_FRAME_BUFFER+0x130000)
 #define LCD_FRAME_BUFFER_LAYER1                  LCD_FRAME_BUFFER
+#define F32_PI 3.1415927
 
+typedef struct 
+{
+  float X;
+  float Y;
+} XYCoordinates;
 
-static volatile float servo1NewPosRef = 7.5;
-static volatile float servo2NewPosRef = 6.8;
-static volatile float servo3NewPosRef = 6.8;
-static volatile float servo4NewPosRef = 7.5;
+typedef struct 
+{
+  float joint1Angle;
+  float joint2angle;
+} JointAngles;
+
+static volatile float horLinkLength = 0.15;
+static volatile float verLinkLength = 0.135;
+
+static volatile float horLinkAngle = 45;
+static volatile float verLinkAngle = 45;
+static volatile float turnAngle = 0;
+
+static volatile float dutyCycle2DegFactor = 17.0;
+
+static volatile float servo1NewPosRef = 7.5; // forgato 8.2 a valodi kozep
+static volatile float servo2NewPosRef = 8.8;  // vizszintes
+static volatile float servo3NewPosRef = 3.9;   // fuggoleges
+static volatile float servo4NewPosRef = 11.25; // megfogo
 static volatile float servo5NewPosRef = 7.5;
 
 static volatile float servo1NewPos = 7.5;
-static volatile float servo2NewPos = 7.5;
-static volatile float servo3NewPos = 6.8;
+static volatile float servo2NewPos = 10; 
+static volatile float servo3NewPos = 3.7;
 static volatile float servo4NewPos = 7.5;
 static volatile float servo5NewPos = 7.5;
 
 static volatile float servo1CurrPos = 7.5;
-static volatile float servo2CurrPos = 7.5;
-static volatile float servo3CurrPos = 6.8;
-static volatile float servo4CurrPos = 7.5;
+static volatile float servo2CurrPos = 8.8; 
+static volatile float servo3CurrPos = 3.9;
+static volatile float servo4CurrPos = 11.25;
 static volatile float servo5CurrPos = 7.5;
 
 static volatile float servo1Min = 2.5;
 static volatile float servo2Min = 6.5;
-static volatile float servo3Min = 6.3;
+static volatile float servo3Min = 3.7;
 static volatile float servo4Min = 5;
 static volatile float servo5Min = 5;
 
 static volatile float servo1Max = 12.5;
-static volatile float servo2Max = 10.5;
+static volatile float servo2Max = 11.5;
 static volatile float servo3Max = 8.3;
-static volatile float servo4Max = 10;
+static volatile float servo4Max = 11.3;
 static volatile float servo5Max = 10;
 
-static volatile float servo1StepSize = 0.03;
-static volatile float servo2StepSize = 0.03;
-static volatile float servo3StepSize = 0.03;
-static volatile float servo4StepSize = 0.03;
-static volatile float servo5StepSize = 0.03;
+
+
+static volatile float servo1StepSize = 0.014;
+static volatile float servo2StepSize = 0.024;
+static volatile float servo3StepSize = 0.024;
+static volatile float servo4StepSize = 0.024;
+static volatile float servo5StepSize = 0.024;
 
 static volatile int mode = 0;
 static volatile int cycleRepeat = 0;
+static volatile int graphicsEna =1;
 
-char txBuf[10];
-char rxBuf[10];
+char txBuf[30];
+char rxBuf[20];
 uint8_t receiveState = 0;
+
+Point verLinkPoints[4];
+Point horLinkPoints[4];
+
+XYCoordinates coordinates;
+JointAngles calculatedAngles;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -244,12 +276,12 @@ int main(void)
   BSP_LCD_SetTextColor(LCD_COLOR_CYAN);
   BSP_LCD_SetFont(&Font16);
   BSP_LCD_DrawRect(0,0,239,319);
-  BSP_LCD_DisplayStringAt(5,8,"Robotkar vezerles v1",LEFT_MODE);
-  BSP_LCD_SetTextColor(LCD_COLOR_RED);
-  BSP_LCD_FillCircle(120, 160, 80);
+  BSP_LCD_DisplayStringAt(5,8,"RobotArm Control 2.0",LEFT_MODE);
+  BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+  //BSP_LCD_FillCircle(120, 160, 80);
 
   
-  BSP_LCD_SetFont(&Font24);
+  //BSP_LCD_SetFont(&Font24);
   //Touchscreen_Calibration();
   BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
   
@@ -269,15 +301,15 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityLow, 0, 128);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityLow, 0, 256);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of commTask */
-  osThreadDef(commTask, StartCommTask, osPriorityNormal, 0, 128);
+  osThreadDef(commTask, StartCommTask, osPriorityHigh, 0, 128);
   commTaskHandle = osThreadCreate(osThread(commTask), NULL);
 
   /* definition and creation of sensorTask */
-  osThreadDef(sensorTask, StartSensorTask, osPriorityAboveNormal, 0, 128);
+  osThreadDef(sensorTask, StartSensorTask, osPriorityBelowNormal, 0, 128);
   sensorTaskHandle = osThreadCreate(osThread(sensorTask), NULL);
 
   /* definition and creation of controlTask */
@@ -542,9 +574,9 @@ static void MX_TIM2_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 10;
+  htim2.Init.Prescaler = 3;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 22500;
+  htim2.Init.Period = 60000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
   {
@@ -584,9 +616,9 @@ static void MX_TIM3_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 10;
+  htim3.Init.Prescaler = 3;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 22500;
+  htim3.Init.Period = 60000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
   {
@@ -626,9 +658,9 @@ static void MX_TIM4_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 10;
+  htim4.Init.Prescaler = 3;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 22500;
+  htim4.Init.Period = 60000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
@@ -673,6 +705,7 @@ static void MX_UART5_Init(void)
   }
 
 }
+
 /* FMC initialization function */
 static void MX_FMC_Init(void)
 {
@@ -804,6 +837,86 @@ void saturateFloat(volatile float* i, float min, float max) {
   *i = val;
 }
 
+float absfloat(float num){
+  if (num < 0) return (num*-1);
+  else return num;
+}
+
+float deg2rad(float deg){
+  float rad = 0;
+  rad = (deg * F32_PI) / 180.0;
+  return rad;
+}
+
+float rad2deg(float rad){
+  float deg = 0;
+  deg = (rad * 180) / F32_PI;
+  return deg;
+}
+
+float deg2dc(float angleDeg) {
+  float dc = 0;
+  dc = (180-angleDeg)/dutyCycle2DegFactor;
+  return dc;
+}
+
+float dc2deg(float dc) {
+  float angleDeg = 0;
+  angleDeg = 180 - (dc * dutyCycle2DegFactor);
+  return angleDeg;
+}
+
+float receivedTurn2dc(uint16_t turnNumber){
+  return (turnNumber/20.0 + 2.5);
+}
+
+float dc2turnDeg(float dc){
+  return ((dc - 7.5)*9);
+}
+
+float receivedGrip2dc(uint16_t gripValue){
+  return (gripValue/16.0 + 5.0);
+}
+
+XYCoordinates calculateForwardKinematics(float joint1Angle, float joint2Angle){
+  
+  coordinates.X = verLinkLength * cosf(deg2rad(joint1Angle)) + horLinkLength * cosf(deg2rad(joint2Angle));
+  coordinates.Y = verLinkLength * sinf(deg2rad(joint1Angle)) - horLinkLength * sinf(deg2rad(joint2Angle));
+  
+  return coordinates;
+}
+
+JointAngles calculateInverseKinematics(float xPos, float yPos){
+  
+  static volatile float x_temp;
+  static volatile float y_temp;
+  static float c;
+  static float gamma;
+  static float alpha;
+  static float beta;
+  static float epsilon;
+  static float delta;
+  static float omega;
+  
+  x_temp = xPos;
+  y_temp = yPos;
+  
+  c = sqrtf(xPos*xPos + yPos*yPos); //c^2=a^2+b^2
+  gamma = asinf(yPos/c);
+  alpha = acosf((verLinkLength*verLinkLength + c*c - horLinkLength*horLinkLength)/(2*verLinkLength*c));
+  
+  calculatedAngles.joint1Angle = rad2deg(gamma + alpha);
+  
+  beta = acosf((verLinkLength*verLinkLength + horLinkLength*horLinkLength - c*c)/(2*verLinkLength*c));
+  epsilon = 90 - rad2deg(gamma + alpha);
+  delta = 90 - epsilon;
+  omega = 180 - delta - rad2deg(beta);
+  
+  calculatedAngles.joint2angle = omega;
+  
+  return calculatedAngles;
+}
+
 /**
    * @brief Count characters in char array
 	 * @param ptr: pointer to char array
@@ -830,6 +943,15 @@ void StartDefaultTask(void const * argument)
 
   /* USER CODE BEGIN 5 */
   int elapsedTime = 0;
+  char textBuf[30];
+  float verLinkAngleAfterRefresh = 0;
+  float horLinkAngleAfterRefresh = 0;
+  float turnAngleAfterRefresh = 0;
+  
+  XYCoordinates endPoint;
+  //JointAngles finalJointAngles;
+  
+  
   /* Infinite loop */
   for(;;)
   {
@@ -837,15 +959,91 @@ void StartDefaultTask(void const * argument)
       //mode++;
       //cycleRepeat = 1;
       cycleRepeat ^= 1;
-      BSP_LCD_DisplayChar(20,30,(char)(cycleRepeat+48));
+      BSP_LCD_DisplayChar(5,25,(char)(cycleRepeat+48));
       elapsedTime = 0;
     }
     
     if (elapsedTime < 100){
       elapsedTime+=1;
     }
+    
+    verLinkAngle = dc2deg(servo3CurrPos);
+    horLinkAngle = dc2deg(servo2CurrPos);
+    turnAngle    = dc2turnDeg(servo1CurrPos);
+    
+    sprintf(textBuf, "V joint: %.2f deg",  verLinkAngle);
+    BSP_LCD_DisplayStringAt(5, 45, (unsigned char*) textBuf, LEFT_MODE);
+    sprintf(textBuf, "H joint: %.2f deg",  horLinkAngle);
+    BSP_LCD_DisplayStringAt(5, 60, (unsigned char*) textBuf, LEFT_MODE);
+    
+    
+    endPoint = calculateForwardKinematics(verLinkAngle,horLinkAngle);
+    
+    sprintf(textBuf, "X: %.1f cm", (endPoint.X*100));
+    BSP_LCD_DisplayStringAt(5, 75, (unsigned char*) textBuf, LEFT_MODE);
+    sprintf(textBuf, "Y: %.1f cm", (endPoint.Y*100));
+    BSP_LCD_DisplayStringAt(5, 90, (unsigned char*) textBuf, LEFT_MODE);
+    
+    if (((verLinkAngleAfterRefresh != verLinkAngle) || (horLinkAngleAfterRefresh != horLinkAngle) || (turnAngleAfterRefresh != turnAngle)) && (graphicsEna)) {
+      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+      BSP_LCD_FillRect(5,135,230,180);
+      BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
       
-    osDelay(100);
+      verLinkAngleAfterRefresh = verLinkAngle;
+      horLinkAngleAfterRefresh = horLinkAngle;
+      turnAngleAfterRefresh    = turnAngle;
+      
+      verLinkPoints[0].X = 45;
+      verLinkPoints[0].Y = 250;
+      verLinkPoints[1].X = verLinkPoints[0].X + 10;
+      verLinkPoints[1].Y = verLinkPoints[0].Y;
+      
+      verLinkPoints[3].X = (int16_t)(verLinkPoints[0].X + (74.25*cosf(deg2rad(verLinkAngle))));
+      verLinkPoints[3].Y = (int16_t)(verLinkPoints[0].Y - (74.25*sinf(deg2rad(verLinkAngle))));
+      verLinkPoints[2].X = verLinkPoints[3].X + 10;
+      verLinkPoints[2].Y = verLinkPoints[3].Y;
+      
+      horLinkPoints[0].X = verLinkPoints[2].X;
+      horLinkPoints[0].Y = verLinkPoints[2].Y;
+      horLinkPoints[1].X = verLinkPoints[2].X;
+      horLinkPoints[1].Y = verLinkPoints[2].Y + 10;
+      
+      horLinkPoints[3].X = (int16_t)(horLinkPoints[0].X + (82.5*cosf(deg2rad(horLinkAngle))));
+      horLinkPoints[3].Y = (int16_t)(horLinkPoints[0].Y + (82.5*sinf(deg2rad(horLinkAngle))));
+      horLinkPoints[2].X = horLinkPoints[3].X;
+      horLinkPoints[2].Y = horLinkPoints[3].Y + 10; 
+        
+      BSP_LCD_FillRect(30, 250, 40, 40);
+      BSP_LCD_FillPolygon(verLinkPoints, 4);
+      BSP_LCD_FillPolygon(horLinkPoints, 4);
+      BSP_LCD_FillRect(horLinkPoints[3].X, horLinkPoints[3].Y, 30, 10);
+      
+      BSP_LCD_FillCircle(50,250,10);
+      BSP_LCD_FillCircle(verLinkPoints[3].X+5,verLinkPoints[3].Y+5,10);
+      BSP_LCD_FillCircle(horLinkPoints[3].X,horLinkPoints[3].Y+5,10);
+      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+      BSP_LCD_FillCircle(50,250,5);
+      BSP_LCD_FillCircle(verLinkPoints[3].X+5,verLinkPoints[3].Y+5,5);
+      BSP_LCD_FillCircle(horLinkPoints[3].X,horLinkPoints[3].Y+5,5);
+      BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+      
+      if (turnAngle < -0.1){
+        sprintf(textBuf, "   %.1f ->",  (turnAngle*-1));
+      }
+      else if (turnAngle > 0.1){
+        sprintf(textBuf, "<- %.1f",  turnAngle);
+      }
+      else {
+        sprintf(textBuf, "   %.1f",  turnAngle);
+      }
+      BSP_LCD_SetFont(&Font12);
+      BSP_LCD_DisplayStringAt(15, 300, (unsigned char*) textBuf, LEFT_MODE);
+      BSP_LCD_SetFont(&Font16);
+    }
+    
+    
+    
+    osDelay(500);
   }
   /* USER CODE END 5 */ 
 }
@@ -854,24 +1052,80 @@ void StartDefaultTask(void const * argument)
 void StartCommTask(void const * argument)
 {
   /* USER CODE BEGIN StartCommTask */
-  //uint16_t Len = 0;
-  strcpy(txBuf, "echo:\r");
-  uint16_t servo1ComPosRef = 75;
+  uint16_t Len = 0;
+  //strcpy(txBuf, "echo: ");
+  
+  static int16_t turnValue = 100;
+  static int16_t xPosValue = 100;
+  static int16_t yPosValue = 100;
+  static int16_t gripperValue = 100;
+
+  static float xPoscm = 0;
+  static float yPoscm = 0;
+  
+  static float targetStepSizeVar = 0.024; // 1 deg/s = 0.00588
+  static float numberOfSteps = 0;
+
+  static JointAngles finalJointAngles;
+  
+  //uint16_t servo1ComPosRef = 75;
   /* Infinite loop */
   for(;;)
   {
 
     if (receiveState == 1){
 
-      //Len = SizeofCharArray((char*)txBuf);
-      //CDC_Transmit_HS((uint8_t*)txBuf, Len);
+      if ( (rxBuf[0] == 'S') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == ';') && (rxBuf[16] == '\r')) { // check the frame
+      
+        turnValue = (int16_t)((rxBuf[1]  - '0')*100 + (rxBuf[2]  - '0')*10 + (rxBuf[3]  - '0')*1);
+        xPosValue = (int16_t)((rxBuf[5]  - '0')*100 + (rxBuf[6]  - '0')*10 + (rxBuf[7]  - '0')*1);
+        yPosValue = (int16_t)((rxBuf[9]  - '0')*100 + (rxBuf[10]  - '0')*10 + (rxBuf[11]  - '0')*1);
+        gripperValue = (int16_t)((rxBuf[13]  - '0')*100 + (rxBuf[14]  - '0')*10 + (rxBuf[15]  - '0')*1);
+          
+        xPoscm = ((float)xPosValue)/10.0;
+        yPoscm = (((float)yPosValue)-50)/10.0;
+        
+        if (cycleRepeat == 0){
+        
+          finalJointAngles = calculateInverseKinematics(xPoscm/100.0,yPoscm/100.0);
+          servo3NewPosRef = deg2dc(finalJointAngles.joint1Angle);
+          servo2NewPosRef = deg2dc(finalJointAngles.joint2angle);
+          servo1NewPosRef = receivedTurn2dc(turnValue);
+          servo4NewPosRef = receivedGrip2dc(gripperValue);
+          
+          if ((absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo2NewPosRef-servo2CurrPos)) && (absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
+            servo3StepSize = targetStepSizeVar;
+            numberOfSteps = absfloat(servo3NewPosRef-servo3CurrPos)/targetStepSizeVar;
+            servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
+            servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
+          }
+          else if ((absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo3NewPosRef-servo3CurrPos)) && (absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
+            servo2StepSize = targetStepSizeVar;
+            numberOfSteps = absfloat(servo2NewPosRef-servo2CurrPos)/targetStepSizeVar;
+            servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
+            servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
+          }
+          else{
+            servo1StepSize = targetStepSizeVar;
+            numberOfSteps = absfloat(servo1NewPosRef-servo1CurrPos)/targetStepSizeVar;
+            servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
+            servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
+          }
+        }
+        
+        sprintf(txBuf, "OK: %s\r", rxBuf);
+        Len = SizeofCharArray((char*)txBuf);
+        CDC_Transmit_HS((uint8_t*)txBuf, Len);
+      }
+      else{
+        sprintf(txBuf, "ERR: %s\r", rxBuf);
+        Len = SizeofCharArray((char*)txBuf);
+        CDC_Transmit_HS((uint8_t*)txBuf, Len);
+        
+      }
       
       receiveState = 0;
-      //Len = SizeofCharArray((char*)rxBuf);
-      //CDC_Transmit_HS((uint8_t*)rxBuf, Len);
-      servo1ComPosRef = (rxBuf[0]  - '0')*10 + (rxBuf[1]  - '0')*1;
-      
-      servo1NewPosRef = servo1ComPosRef / 10.0;
+
     }
     osDelay(1000);
   }
@@ -989,11 +1243,11 @@ void StartControlTask(void const * argument)
       }
     }
     
-    TIM2->CCR1 = (int)(servo1NewPos*45000/100);//7.5 = 1.5ms
-    TIM2->CCR2 = (int)(servo2NewPos*45000/100);//10 = 2ms
-    TIM3->CCR1 = (int)(servo3NewPos*45000/100);//5 = 1ms
-    TIM3->CCR3 = (int)(servo4NewPos*45000/100);
-    TIM4->CCR2 = (int)(servo5NewPos*45000/100);
+    TIM2->CCR1 = (int)(servo1NewPos*120000/100);//7.5 = 1.5ms
+    TIM2->CCR2 = (int)(servo2NewPos*120000/100);//10 = 2ms
+    TIM3->CCR1 = (int)(servo3NewPos*120000/100);//5 = 1ms
+    TIM3->CCR3 = (int)(servo4NewPos*120000/100);
+    TIM4->CCR2 = (int)(servo5NewPos*120000/100);
     
     servo1CurrPos = servo1NewPos;
     servo2CurrPos = servo2NewPos;
@@ -1031,6 +1285,7 @@ void StartServoRampTask(void const * argument)
       if (taskCounter % 12 == 0){
         servo3NewPosRef = 6.8;
         servo4NewPosRef = 6;
+        servo1StepSize = 0.03;
         taskDelay = 1000;
       }
       else if (taskCounter % 12 == 1){
@@ -1043,7 +1298,7 @@ void StartServoRampTask(void const * argument)
       }
       else if (taskCounter % 12 == 3){
         servo1NewPosRef = 3;
-        servo2NewPosRef = 6.35;
+        servo2NewPosRef = 7.5;
         taskDelay = 2000;
       }
       else if (taskCounter % 12 == 4){
@@ -1076,7 +1331,7 @@ void StartServoRampTask(void const * argument)
       }
       else if (taskCounter % 12 == 9){
         servo1NewPosRef = 3;
-        servo2NewPosRef = 6.35;
+        servo2NewPosRef = 7.5;
         servo2StepSize = 0.03;
         taskDelay = 2000;
       }
@@ -1115,7 +1370,7 @@ void StartTsTask(void const * argument)
 
     x = State.X;
     y = State.Y; 
-    
+    /*
     if (State.TouchDetected){
       BSP_LCD_DrawCircle(x,y,3);
       BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
@@ -1125,7 +1380,7 @@ void StartTsTask(void const * argument)
       BSP_LCD_SetTextColor(LCD_COLOR_RED);
       BSP_LCD_FillCircle(120, 160, 80);
     }
-      
+    */
     osDelay(10);
   }
   /* USER CODE END StartTsTask */

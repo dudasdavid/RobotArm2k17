@@ -117,7 +117,7 @@ uint8_t tempbuf[7];
   */ 
   extern USBD_HandleTypeDef hUsbDeviceHS;  
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-  extern char rxBuf[10];
+  extern char rxBuf[20];
   extern uint8_t receiveState;
 /* USER CODE END EXPORTED_VARIABLES */
 
