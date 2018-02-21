@@ -907,7 +907,7 @@ JointAngles calculateInverseKinematics(float xPos, float yPos){
   
   calculatedAngles.joint1Angle = rad2deg(gamma + alpha);
   
-  beta = acosf((verLinkLength*verLinkLength + horLinkLength*horLinkLength - c*c)/(2*verLinkLength*c));
+  beta = acosf((verLinkLength*verLinkLength + horLinkLength*horLinkLength - c*c)/(2*verLinkLength*horLinkLength));
   epsilon = 90 - rad2deg(gamma + alpha);
   delta = 90 - epsilon;
   omega = 180 - delta - rad2deg(beta);
