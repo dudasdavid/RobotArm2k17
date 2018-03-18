@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Project>
 <ProjectName>C:\GIT\RobotArm2k17\STM32F4\RobotArm\\RobotArm</ProjectName>
+<ProjectNature>C</ProjectNature> 
 <CMSIS>..\Drivers\CMSIS</CMSIS>
-<HAL_Driver>C:\Users\david\STM32Cube\Repository\STM32Cube_FW_F4_V1.17.0\Drivers\CMSIS</HAL_Driver>
-
+<HAL_Driver>C:\Users\david\STM32Cube\Repository\STM32Cube_FW_F4_V1.21.0\Drivers\CMSIS</HAL_Driver>
 <Toolchain>EWARM</Toolchain>
 	<Toolversion>0</Toolversion>
 <Version>0</Version>
 
 <filestoremove>
-	<file>
-	</file>
+    <file>
+    <name>..\Src\system_stm32f4xx.c</name>
+    </file>
 </filestoremove>
 
 <inctoremove>
@@ -33,7 +34,7 @@
 			
     <usedDebug>true</usedDebug>
     	<debugprobe></debugprobe>
-    <optimization></optimization>
+    <optimization>2</optimization>
     <icfloc>0</icfloc>
     <Adefines>
         <define></define>
@@ -41,7 +42,7 @@
 
     <UsedFreeRTOS>true</UsedFreeRTOS>
     <Aincludes>
-		   		<include>$PROJ_DIR$\..\Inc</include>
+		   		<include>$PROJ_DIR$\..\\Inc</include>
     </Aincludes>
     <Cdefines>
     </Cdefines>
@@ -52,8 +53,6 @@
         <Cdefines>
             <define>USE_FULL_LL_DRIVER</define>
             <define>MBEDTLS_CONFIG_FILE=&quot;mbedtls_config.h&quot;</define>
-            <define>_TIMEVAL_DEFINED</define>
-            <define>_SYS_TIME_H_</define>
         </Cdefines>         
     </definestoremove>
     
@@ -218,7 +217,7 @@
 		    <group>
 		    	<name>CMSIS</name>
 							<file>
-								<name>../Src/system_stm32f4xx.c</name>
+								<name>../\Src/system_stm32f4xx.c</name>
 							</file>
 		    	</group>
 	  </group>   

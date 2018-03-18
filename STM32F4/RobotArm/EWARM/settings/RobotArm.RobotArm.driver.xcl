@@ -1,5 +1,3 @@
- -B 
-
 "--endian=little" 
 
 "--cpu=Cortex-M4" 
@@ -8,7 +6,7 @@
 
 "-p" 
 
-"C:\Program Files (x86)\IAR Systems\Embedded Workbench 7.2\arm\CONFIG\debugger\ST\STM32F429ZI.ddf" 
+"C:\Program Files (x86)\IAR Systems\Embedded Workbench 8.0\arm\CONFIG\debugger\ST\STM32F429ZI.ddf" 
 
 "--drv_verify_download" 
 
@@ -21,6 +19,10 @@
 "--stlink_reset_strategy=0,0" 
 
 "--drv_swo_clock_setup=48000000,0,2000000" 
+
+"--drv_catch_exceptions=0x000" 
+
+"--drv_debug_ap=0" 
 
 
 

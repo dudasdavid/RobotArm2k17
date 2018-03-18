@@ -1,7 +1,8 @@
+
 /**
   ******************************************************************************
-  * File Name          : main.c
-  * Description        : Main program body
+  * @file           : main.c
+  * @brief          : Main program body
   ******************************************************************************
   * This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
@@ -9,7 +10,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * Copyright (c) 2017 STMicroelectronics International N.V. 
+  * Copyright (c) 2018 STMicroelectronics International N.V. 
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without 
@@ -45,7 +46,6 @@
   *
   ******************************************************************************
   */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_hal.h"
@@ -102,6 +102,14 @@ typedef struct
   float joint1Angle;
   float joint2angle;
 } JointAngles;
+
+typedef struct 
+{
+  float jointXAngle;
+  float jointYAngle;
+  float jointZAngle;
+} JointAngles3Axis;
+
 
 static volatile float horLinkLength = 0.15;
 static volatile float verLinkLength = 0.135;
@@ -163,6 +171,7 @@ Point horLinkPoints[4];
 
 XYCoordinates coordinates;
 JointAngles calculatedAngles;
+JointAngles3Axis calculatedAngles3Axis;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -199,9 +208,13 @@ extern uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE END 0 */
 
+/**
+  * @brief  The application entry point.
+  *
+  * @retval None
+  */
 int main(void)
 {
-
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -234,7 +247,6 @@ int main(void)
   MX_DMA2D_Init();
   MX_FMC_Init();
   MX_RNG_Init();
-
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);    //servoPWM1
   HAL_TIMEx_PWMN_Start(&htim2, TIM_CHANNEL_1);
@@ -351,8 +363,10 @@ int main(void)
 
 }
 
-/** System Clock Configuration
-*/
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
 
@@ -870,6 +884,10 @@ float receivedTurn2dc(uint16_t turnNumber){
   return (turnNumber/20.0 + 2.5);
 }
 
+float xRotate2dc(float angleDeg) {
+    return (angleDeg/8.0 + 7.5);
+}
+
 float dc2turnDeg(float dc){
   return ((dc - 7.5)*9);
 }
@@ -915,6 +933,42 @@ JointAngles calculateInverseKinematics(float xPos, float yPos){
   calculatedAngles.joint2angle = omega;
   
   return calculatedAngles;
+}
+
+JointAngles3Axis calculateInverseKinematics3Axis(float xPos, float yPos, float zPos){
+  
+  static volatile float x_temp;
+  static volatile float y_temp;
+  static float yPosRecalculated;
+  static float c;
+  static float gamma;
+  static float alpha;
+  static float beta;
+  static float epsilon;
+  static float delta;
+  static float omega;
+  
+  x_temp = xPos;
+  y_temp = yPos;
+  
+  calculatedAngles3Axis.jointXAngle = rad2deg(atanf(xPos/yPos));
+  
+  yPosRecalculated = sqrtf(yPos*yPos + xPos*xPos);
+  
+  c = sqrtf(yPosRecalculated*yPosRecalculated + zPos*zPos); //c^2=a^2+b^2
+  gamma = asinf(zPos/c);
+  alpha = acosf((verLinkLength*verLinkLength + c*c - horLinkLength*horLinkLength)/(2*verLinkLength*c));
+  
+  calculatedAngles3Axis.jointZAngle = rad2deg(gamma + alpha);
+  
+  beta = acosf((verLinkLength*verLinkLength + horLinkLength*horLinkLength - c*c)/(2*verLinkLength*horLinkLength));
+  epsilon = 90 - rad2deg(gamma + alpha);
+  delta = 90 - epsilon;
+  omega = 180 - delta - rad2deg(beta);
+  
+  calculatedAngles3Axis.jointYAngle = omega;
+  
+  return calculatedAngles3Axis;
 }
 
 /**
@@ -1059,14 +1113,24 @@ void StartCommTask(void const * argument)
   static int16_t xPosValue = 100;
   static int16_t yPosValue = 100;
   static int16_t gripperValue = 100;
-
+  
+  static int16_t xAxisValue = 0;
+  static int16_t yAxisValue = 100;
+  static int16_t zAxisValue = 100;
+  static int16_t aAxisValue = 100;
+  
   static float xPoscm = 0;
   static float yPoscm = 0;
+  
+  static float xAxisCm = 0;
+  static float yAxisCm = 0;
+  static float zAxisCm = 0;
   
   static float targetStepSizeVar = 0.024; // 1 deg/s = 0.00588
   static float numberOfSteps = 0;
 
   static JointAngles finalJointAngles;
+  static JointAngles3Axis finalJointAngles3Axis;
   
   //uint16_t servo1ComPosRef = 75;
   /* Infinite loop */
@@ -1113,6 +1177,46 @@ void StartCommTask(void const * argument)
           }
         }
         
+        sprintf(txBuf, "OK: %s\r", rxBuf);
+        Len = SizeofCharArray((char*)txBuf);
+        CDC_Transmit_HS((uint8_t*)txBuf, Len);
+      }
+      else if ((rxBuf[0] == 'P') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == ';') && (rxBuf[16] == '\r')){
+        xAxisValue = (int16_t)((rxBuf[1]  - '0')*100 + (rxBuf[2]  - '0')*10 + (rxBuf[3]  - '0')*1);
+        yAxisValue = (int16_t)((rxBuf[5]  - '0')*100 + (rxBuf[6]  - '0')*10 + (rxBuf[7]  - '0')*1);
+        zAxisValue = (int16_t)((rxBuf[9]  - '0')*100 + (rxBuf[10]  - '0')*10 + (rxBuf[11]  - '0')*1);
+        aAxisValue = (int16_t)((rxBuf[13]  - '0')*100 + (rxBuf[14]  - '0')*10 + (rxBuf[15]  - '0')*1);
+          
+        xAxisCm = ((float)xAxisValue-100)/10.0;
+        yAxisCm = ((float)yAxisValue)/10.0;
+        zAxisCm = ((float)zAxisValue-50)/10.0;
+        
+        if (cycleRepeat == 0){
+          finalJointAngles3Axis = calculateInverseKinematics3Axis(xAxisCm/100.0,yAxisCm/100.0,zAxisCm/100.0);
+          servo3NewPosRef = deg2dc(finalJointAngles3Axis.jointZAngle);
+          servo2NewPosRef = deg2dc(finalJointAngles3Axis.jointYAngle);
+          servo1NewPosRef = xRotate2dc(finalJointAngles3Axis.jointXAngle);
+          servo4NewPosRef = receivedGrip2dc(aAxisValue);
+          
+          if ((absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo2NewPosRef-servo2CurrPos)) && (absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
+            servo3StepSize = targetStepSizeVar;
+            numberOfSteps = absfloat(servo3NewPosRef-servo3CurrPos)/targetStepSizeVar;
+            servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
+            servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
+          }
+          else if ((absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo3NewPosRef-servo3CurrPos)) && (absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
+            servo2StepSize = targetStepSizeVar;
+            numberOfSteps = absfloat(servo2NewPosRef-servo2CurrPos)/targetStepSizeVar;
+            servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
+            servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
+          }
+          else{
+            servo1StepSize = targetStepSizeVar;
+            numberOfSteps = absfloat(servo1NewPosRef-servo1CurrPos)/targetStepSizeVar;
+            servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
+            servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
+          }
+        }
         sprintf(txBuf, "OK: %s\r", rxBuf);
         Len = SizeofCharArray((char*)txBuf);
         CDC_Transmit_HS((uint8_t*)txBuf, Len);
@@ -1396,58 +1500,56 @@ void StartTsTask(void const * argument)
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-/* USER CODE BEGIN Callback 0 */
+  /* USER CODE BEGIN Callback 0 */
 
-/* USER CODE END Callback 0 */
+  /* USER CODE END Callback 0 */
   if (htim->Instance == TIM6) {
     HAL_IncTick();
   }
-/* USER CODE BEGIN Callback 1 */
+  /* USER CODE BEGIN Callback 1 */
 
-/* USER CODE END Callback 1 */
+  /* USER CODE END Callback 1 */
 }
 
 /**
   * @brief  This function is executed in case of error occurrence.
-  * @param  None
+  * @param  file: The file name as string.
+  * @param  line: The line in file as a number.
   * @retval None
   */
-void _Error_Handler(char * file, int line)
+void _Error_Handler(char *file, int line)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   while(1) 
   {
   }
-  /* USER CODE END Error_Handler_Debug */ 
+  /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
-
+#ifdef  USE_FULL_ASSERT
 /**
-   * @brief Reports the name of the source file and the source line number
-   * where the assert_param error has occurred.
-   * @param file: pointer to the source file name
-   * @param line: assert_param error line source number
-   * @retval None
-   */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t* file, uint32_t line)
-{
+{ 
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
-
 }
-
-#endif
-
-/**
-  * @}
-  */ 
+#endif /* USE_FULL_ASSERT */
 
 /**
   * @}
-*/ 
+  */
+
+/**
+  * @}
+  */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
