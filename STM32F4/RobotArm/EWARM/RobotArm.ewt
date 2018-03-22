@@ -1197,6 +1197,30 @@
         </group>
         <group>
             <name>User</name>
+            <group>
+                <name>STemWin</name>
+                <group>
+                    <name>App</name>
+                    <file>
+                        <name>$PROJ_DIR$\..\STemWin\App\FramewinDLG.c</name>
+                    </file>
+                    <file>
+                        <name>$PROJ_DIR$\..\STemWin\App\GUI_App.c</name>
+                    </file>
+                </group>
+                <group>
+                    <name>Target</name>
+                    <file>
+                        <name>$PROJ_DIR$\..\STemWin\Target\GUIConf.c</name>
+                    </file>
+                    <file>
+                        <name>$PROJ_DIR$\..\STemWin\Target\HW_Init.c</name>
+                    </file>
+                    <file>
+                        <name>$PROJ_DIR$\..\STemWin\Target\STemwin_wrapper.c</name>
+                    </file>
+                </group>
+            </group>
             <file>
                 <name>$PROJ_DIR$\..\Src\freertos.c</name>
             </file>
@@ -1265,6 +1289,12 @@
     <group>
         <name>Drivers</name>
         <group>
+            <name>BSP</name>
+            <group>
+                <name>Components</name>
+            </group>
+        </group>
+        <group>
             <name>CMSIS</name>
             <file>
                 <name>$PROJ_DIR$\..\Src\system_stm32f4xx.c</name>
@@ -1276,7 +1306,16 @@
                 <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal.c</name>
             </file>
             <file>
+                <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_adc.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_adc_ex.c</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_cortex.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_crc.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma.c</name>
@@ -1391,6 +1430,15 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\Middlewares\Third_Party\FreeRTOS\Source\timers.c</name>
+            </file>
+        </group>
+        <group>
+            <name>STemWin</name>
+            <file>
+                <name>$PROJ_DIR$\..\Middlewares\ST\STemWin\OS\GUI_X_OS.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\Middlewares\ST\STemWin\Lib\STemWin540_CM4_OS_IAR_ot_ARGB.a</name>
             </file>
         </group>
         <group>

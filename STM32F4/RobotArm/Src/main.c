@@ -60,6 +60,11 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+
+CRC_HandleTypeDef hcrc;
+
 DMA2D_HandleTypeDef hdma2d;
 
 I2C_HandleTypeDef hi2c3;
@@ -84,6 +89,7 @@ osThreadId sensorTaskHandle;
 osThreadId controlTaskHandle;
 osThreadId servoRampTaskHandle;
 osThreadId tsTaskHandle;
+osThreadId oldGraphicsTaskHandle;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -120,10 +126,13 @@ static volatile float turnAngle = 0;
 
 static volatile float dutyCycle2DegFactor = 17.0;
 
-static volatile float servo1NewPosRef = 7.5; // forgato 8.2 a valodi kozep
+#define servo1calib 0.7
+#define servo4calib -0.85
+
+static volatile float servo1NewPosRef = 7.5 + servo1calib; // forgato 8.2 a valodi kozep
 static volatile float servo2NewPosRef = 8.8;  // vizszintes
 static volatile float servo3NewPosRef = 3.9;   // fuggoleges
-static volatile float servo4NewPosRef = 11.25; // megfogo
+static volatile float servo4NewPosRef = 7.5 + servo4calib; // megfogo 11.25
 static volatile float servo5NewPosRef = 7.5;
 
 static volatile float servo1NewPos = 7.5;
@@ -135,19 +144,19 @@ static volatile float servo5NewPos = 7.5;
 static volatile float servo1CurrPos = 7.5;
 static volatile float servo2CurrPos = 8.8; 
 static volatile float servo3CurrPos = 3.9;
-static volatile float servo4CurrPos = 11.25;
+static volatile float servo4CurrPos = 7.5; //11.25
 static volatile float servo5CurrPos = 7.5;
 
 static volatile float servo1Min = 2.5;
 static volatile float servo2Min = 6.5;
 static volatile float servo3Min = 3.7;
-static volatile float servo4Min = 5;
+static volatile float servo4Min = 2.5;
 static volatile float servo5Min = 5;
 
 static volatile float servo1Max = 12.5;
 static volatile float servo2Max = 11.5;
 static volatile float servo3Max = 8.3;
-static volatile float servo4Max = 11.3;
+static volatile float servo4Max = 12.5;//11.3
 static volatile float servo5Max = 10;
 
 
@@ -172,27 +181,34 @@ Point horLinkPoints[4];
 XYCoordinates coordinates;
 JointAngles calculatedAngles;
 JointAngles3Axis calculatedAngles3Axis;
+
+static volatile uint32_t ADC_Buf[3];
+static volatile uint32_t val[3];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_UART5_Init(void);
 static void MX_SPI5_Init(void);
 static void MX_I2C3_Init(void);
-static void MX_LTDC_Init(void);
+static void MX_RNG_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_CRC_Init(void);
 static void MX_DMA2D_Init(void);
 static void MX_FMC_Init(void);
-static void MX_RNG_Init(void);
+static void MX_LTDC_Init(void);
 void StartDefaultTask(void const * argument);
 void StartCommTask(void const * argument);
 void StartSensorTask(void const * argument);
 void StartControlTask(void const * argument);
 void StartServoRampTask(void const * argument);
 void StartTsTask(void const * argument);
+void StartOldGraphicsTask(void const * argument);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
                                 
@@ -205,7 +221,15 @@ extern uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+  
+  
+  if(hadc->Instance==ADC1){
+    val[0] = ADC_Buf[0];
+    val[1] = ADC_Buf[1];
+    val[2] = ADC_Buf[2];
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -237,16 +261,19 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_UART5_Init();
   MX_SPI5_Init();
   MX_I2C3_Init();
-  MX_LTDC_Init();
+  MX_RNG_Init();
+  MX_ADC1_Init();
+  MX_CRC_Init();
   MX_DMA2D_Init();
   MX_FMC_Init();
-  MX_RNG_Init();
+  MX_LTDC_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);    //servoPWM1
   HAL_TIMEx_PWMN_Start(&htim2, TIM_CHANNEL_1);
@@ -268,10 +295,12 @@ int main(void)
   //min 2.5 max 12.5                   -->      
   //2: 2.12 a max 1.2ms a min         -->      10.5...6.5
   //3: 1.65 ms max, 1.3ms a min  --> %-ban 8...6.3
-
+  
+  
   
   BSP_LED_On(LED3);
   BSP_LED_On(LED4);
+  
   
   /* Configure USER Button */
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
@@ -279,6 +308,7 @@ int main(void)
   /*##-1- LCD Initialization #################################################*/ 
   /* Initialize the LCD */
   BSP_LCD_Init();
+  
   
   BSP_LCD_LayerDefaultInit(0, LCD_FRAME_BUFFER_LAYER0);
   BSP_LCD_SelectLayer(0);
@@ -290,13 +320,16 @@ int main(void)
   BSP_LCD_DrawRect(0,0,239,319);
   BSP_LCD_DisplayStringAt(5,8,"RobotArm Control 2.0",LEFT_MODE);
   BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+  //BSP_LCD_DisplayStringAt(5,30,"RobotArm Control 2.0",LEFT_MODE);
   //BSP_LCD_FillCircle(120, 160, 80);
 
   
   //BSP_LCD_SetFont(&Font24);
   //Touchscreen_Calibration();
-  BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
+  BSP_TS_Init(240, 320);
   
+  
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buf,3);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -335,6 +368,10 @@ int main(void)
   /* definition and creation of tsTask */
   osThreadDef(tsTask, StartTsTask, osPriorityNormal, 0, 128);
   tsTaskHandle = osThreadCreate(osThread(tsTask), NULL);
+
+  /* definition and creation of oldGraphicsTask */
+  osThreadDef(oldGraphicsTask, StartOldGraphicsTask, osPriorityLow, 0, 256);
+  oldGraphicsTaskHandle = osThreadCreate(osThread(oldGraphicsTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -378,7 +415,7 @@ void SystemClock_Config(void)
     */
   __HAL_RCC_PWR_CLK_ENABLE();
 
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
@@ -386,11 +423,18 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 192;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Activate the Over-Drive mode 
+    */
+  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -404,14 +448,14 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-  PeriphClkInitStruct.PLLSAI.PLLSAIN = 100;
-  PeriphClkInitStruct.PLLSAI.PLLSAIR = 4;
+  PeriphClkInitStruct.PLLSAI.PLLSAIN = 84;
+  PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
   PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_4;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
@@ -430,18 +474,85 @@ void SystemClock_Config(void)
   HAL_NVIC_SetPriority(SysTick_IRQn, 15, 0);
 }
 
+/* ADC1 init function */
+static void MX_ADC1_Init(void)
+{
+
+  ADC_ChannelConfTypeDef sConfig;
+
+    /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
+    */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 3;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+    */
+  sConfig.Channel = ADC_CHANNEL_13;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+    */
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
+  sConfig.Rank = 2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+    */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  sConfig.Rank = 3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
+/* CRC init function */
+static void MX_CRC_Init(void)
+{
+
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
 /* DMA2D init function */
 static void MX_DMA2D_Init(void)
 {
 
   hdma2d.Instance = DMA2D;
   hdma2d.Init.Mode = DMA2D_M2M;
-  hdma2d.Init.ColorMode = DMA2D_OUTPUT_RGB565;
+  hdma2d.Init.ColorMode = DMA2D_OUTPUT_ARGB8888;
   hdma2d.Init.OutputOffset = 0;
   hdma2d.LayerCfg[1].InputOffset = 0;
-  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_RGB565;
+  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_ARGB8888;
   hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
-  hdma2d.LayerCfg[1].InputAlpha = 0;
+  hdma2d.LayerCfg[1].InputAlpha = 0xFF;
   if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -479,7 +590,6 @@ static void MX_LTDC_Init(void)
 {
 
   LTDC_LayerCfgTypeDef pLayerCfg;
-  LTDC_LayerCfgTypeDef pLayerCfg1;
 
   hltdc.Instance = LTDC;
   hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
@@ -503,41 +613,21 @@ static void MX_LTDC_Init(void)
   }
 
   pLayerCfg.WindowX0 = 0;
-  pLayerCfg.WindowX1 = 0;
+  pLayerCfg.WindowX1 = 240;
   pLayerCfg.WindowY0 = 0;
-  pLayerCfg.WindowY1 = 0;
+  pLayerCfg.WindowY1 = 320;
   pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_ARGB8888;
-  pLayerCfg.Alpha = 0;
+  pLayerCfg.Alpha = 255;
   pLayerCfg.Alpha0 = 0;
-  pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-  pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg.FBStartAdress = 0;
-  pLayerCfg.ImageWidth = 0;
-  pLayerCfg.ImageHeight = 0;
+  pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
+  pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
+  pLayerCfg.FBStartAdress = 0xD0200000;
+  pLayerCfg.ImageWidth = 240;
+  pLayerCfg.ImageHeight = 320;
   pLayerCfg.Backcolor.Blue = 0;
   pLayerCfg.Backcolor.Green = 0;
   pLayerCfg.Backcolor.Red = 0;
   if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 0) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  pLayerCfg1.WindowX0 = 0;
-  pLayerCfg1.WindowX1 = 0;
-  pLayerCfg1.WindowY0 = 0;
-  pLayerCfg1.WindowY1 = 0;
-  pLayerCfg1.PixelFormat = LTDC_PIXEL_FORMAT_ARGB8888;
-  pLayerCfg1.Alpha = 0;
-  pLayerCfg1.Alpha0 = 0;
-  pLayerCfg1.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-  pLayerCfg1.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg1.FBStartAdress = 0;
-  pLayerCfg1.ImageWidth = 0;
-  pLayerCfg1.ImageHeight = 0;
-  pLayerCfg1.Backcolor.Blue = 0;
-  pLayerCfg1.Backcolor.Green = 0;
-  pLayerCfg1.Backcolor.Red = 0;
-  if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg1, 1) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -720,6 +810,20 @@ static void MX_UART5_Init(void)
 
 }
 
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
+
+}
 /* FMC initialization function */
 static void MX_FMC_Init(void)
 {
@@ -734,19 +838,19 @@ static void MX_FMC_Init(void)
   hsdram1.Init.RowBitsNumber = FMC_SDRAM_ROW_BITS_NUM_12;
   hsdram1.Init.MemoryDataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16;
   hsdram1.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
-  hsdram1.Init.CASLatency = FMC_SDRAM_CAS_LATENCY_1;
+  hsdram1.Init.CASLatency = FMC_SDRAM_CAS_LATENCY_3;
   hsdram1.Init.WriteProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
-  hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_DISABLE;
+  hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
   hsdram1.Init.ReadBurst = FMC_SDRAM_RBURST_DISABLE;
-  hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_0;
+  hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_1;
   /* SdramTiming */
-  SdramTiming.LoadToActiveDelay = 16;
-  SdramTiming.ExitSelfRefreshDelay = 16;
-  SdramTiming.SelfRefreshTime = 16;
-  SdramTiming.RowCycleDelay = 16;
-  SdramTiming.WriteRecoveryTime = 16;
-  SdramTiming.RPDelay = 16;
-  SdramTiming.RCDDelay = 16;
+  SdramTiming.LoadToActiveDelay = 2;
+  SdramTiming.ExitSelfRefreshDelay = 7;
+  SdramTiming.SelfRefreshTime = 4;
+  SdramTiming.RowCycleDelay = 7;
+  SdramTiming.WriteRecoveryTime = 3;
+  SdramTiming.RPDelay = 2;
+  SdramTiming.RCDDelay = 2;
 
   if (HAL_SDRAM_Init(&hsdram1, &SdramTiming) != HAL_OK)
   {
@@ -885,7 +989,11 @@ float receivedTurn2dc(uint16_t turnNumber){
 }
 
 float xRotate2dc(float angleDeg) {
-    return (angleDeg/8.0 + 7.5);
+    return (angleDeg/8.0 + 7.5 + servo1calib);
+}
+
+float gripRotate2dc(float angleDeg) {
+    return (-angleDeg/14.0 + 7.5 + servo4calib);
 }
 
 float dc2turnDeg(float dc){
@@ -996,107 +1104,10 @@ void StartDefaultTask(void const * argument)
   MX_USB_DEVICE_Init();
 
   /* USER CODE BEGIN 5 */
-  int elapsedTime = 0;
-  char textBuf[30];
-  float verLinkAngleAfterRefresh = 0;
-  float horLinkAngleAfterRefresh = 0;
-  float turnAngleAfterRefresh = 0;
-  
-  XYCoordinates endPoint;
-  //JointAngles finalJointAngles;
-  
   
   /* Infinite loop */
   for(;;)
   {
-    if ((BSP_PB_GetState(BUTTON_KEY) == SET) && (elapsedTime > 10)){
-      //mode++;
-      //cycleRepeat = 1;
-      cycleRepeat ^= 1;
-      BSP_LCD_DisplayChar(5,25,(char)(cycleRepeat+48));
-      elapsedTime = 0;
-    }
-    
-    if (elapsedTime < 100){
-      elapsedTime+=1;
-    }
-    
-    verLinkAngle = dc2deg(servo3CurrPos);
-    horLinkAngle = dc2deg(servo2CurrPos);
-    turnAngle    = dc2turnDeg(servo1CurrPos);
-    
-    sprintf(textBuf, "V joint: %.2f deg",  verLinkAngle);
-    BSP_LCD_DisplayStringAt(5, 45, (unsigned char*) textBuf, LEFT_MODE);
-    sprintf(textBuf, "H joint: %.2f deg",  horLinkAngle);
-    BSP_LCD_DisplayStringAt(5, 60, (unsigned char*) textBuf, LEFT_MODE);
-    
-    
-    endPoint = calculateForwardKinematics(verLinkAngle,horLinkAngle);
-    
-    sprintf(textBuf, "X: %.1f cm", (endPoint.X*100));
-    BSP_LCD_DisplayStringAt(5, 75, (unsigned char*) textBuf, LEFT_MODE);
-    sprintf(textBuf, "Y: %.1f cm", (endPoint.Y*100));
-    BSP_LCD_DisplayStringAt(5, 90, (unsigned char*) textBuf, LEFT_MODE);
-    
-    if (((verLinkAngleAfterRefresh != verLinkAngle) || (horLinkAngleAfterRefresh != horLinkAngle) || (turnAngleAfterRefresh != turnAngle)) && (graphicsEna)) {
-      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-      BSP_LCD_FillRect(5,135,230,180);
-      BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
-      
-      verLinkAngleAfterRefresh = verLinkAngle;
-      horLinkAngleAfterRefresh = horLinkAngle;
-      turnAngleAfterRefresh    = turnAngle;
-      
-      verLinkPoints[0].X = 45;
-      verLinkPoints[0].Y = 250;
-      verLinkPoints[1].X = verLinkPoints[0].X + 10;
-      verLinkPoints[1].Y = verLinkPoints[0].Y;
-      
-      verLinkPoints[3].X = (int16_t)(verLinkPoints[0].X + (74.25*cosf(deg2rad(verLinkAngle))));
-      verLinkPoints[3].Y = (int16_t)(verLinkPoints[0].Y - (74.25*sinf(deg2rad(verLinkAngle))));
-      verLinkPoints[2].X = verLinkPoints[3].X + 10;
-      verLinkPoints[2].Y = verLinkPoints[3].Y;
-      
-      horLinkPoints[0].X = verLinkPoints[2].X;
-      horLinkPoints[0].Y = verLinkPoints[2].Y;
-      horLinkPoints[1].X = verLinkPoints[2].X;
-      horLinkPoints[1].Y = verLinkPoints[2].Y + 10;
-      
-      horLinkPoints[3].X = (int16_t)(horLinkPoints[0].X + (82.5*cosf(deg2rad(horLinkAngle))));
-      horLinkPoints[3].Y = (int16_t)(horLinkPoints[0].Y + (82.5*sinf(deg2rad(horLinkAngle))));
-      horLinkPoints[2].X = horLinkPoints[3].X;
-      horLinkPoints[2].Y = horLinkPoints[3].Y + 10; 
-        
-      BSP_LCD_FillRect(30, 250, 40, 40);
-      BSP_LCD_FillPolygon(verLinkPoints, 4);
-      BSP_LCD_FillPolygon(horLinkPoints, 4);
-      BSP_LCD_FillRect(horLinkPoints[3].X, horLinkPoints[3].Y, 30, 10);
-      
-      BSP_LCD_FillCircle(50,250,10);
-      BSP_LCD_FillCircle(verLinkPoints[3].X+5,verLinkPoints[3].Y+5,10);
-      BSP_LCD_FillCircle(horLinkPoints[3].X,horLinkPoints[3].Y+5,10);
-      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-      BSP_LCD_FillCircle(50,250,5);
-      BSP_LCD_FillCircle(verLinkPoints[3].X+5,verLinkPoints[3].Y+5,5);
-      BSP_LCD_FillCircle(horLinkPoints[3].X,horLinkPoints[3].Y+5,5);
-      BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
-      
-      if (turnAngle < -0.1){
-        sprintf(textBuf, "   %.1f ->",  (turnAngle*-1));
-      }
-      else if (turnAngle > 0.1){
-        sprintf(textBuf, "<- %.1f",  turnAngle);
-      }
-      else {
-        sprintf(textBuf, "   %.1f",  turnAngle);
-      }
-      BSP_LCD_SetFont(&Font12);
-      BSP_LCD_DisplayStringAt(15, 300, (unsigned char*) textBuf, LEFT_MODE);
-      BSP_LCD_SetFont(&Font16);
-    }
-    
-    
-    
     osDelay(500);
   }
   /* USER CODE END 5 */ 
@@ -1126,7 +1137,7 @@ void StartCommTask(void const * argument)
   static float yAxisCm = 0;
   static float zAxisCm = 0;
   
-  static float targetStepSizeVar = 0.024; // 1 deg/s = 0.00588
+  static volatile float targetStepSizeVar = 0.024; // 1 deg/s = 0.00588
   static float numberOfSteps = 0;
 
   static JointAngles finalJointAngles;
@@ -1181,11 +1192,11 @@ void StartCommTask(void const * argument)
         Len = SizeofCharArray((char*)txBuf);
         CDC_Transmit_HS((uint8_t*)txBuf, Len);
       }
-      else if ((rxBuf[0] == 'P') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == ';') && (rxBuf[16] == '\r')){
+      else if ((rxBuf[0] == 'P') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == '\r')){//&& (rxBuf[12] == ';') && (rxBuf[16] == '\r')){
         xAxisValue = (int16_t)((rxBuf[1]  - '0')*100 + (rxBuf[2]  - '0')*10 + (rxBuf[3]  - '0')*1);
         yAxisValue = (int16_t)((rxBuf[5]  - '0')*100 + (rxBuf[6]  - '0')*10 + (rxBuf[7]  - '0')*1);
         zAxisValue = (int16_t)((rxBuf[9]  - '0')*100 + (rxBuf[10]  - '0')*10 + (rxBuf[11]  - '0')*1);
-        aAxisValue = (int16_t)((rxBuf[13]  - '0')*100 + (rxBuf[14]  - '0')*10 + (rxBuf[15]  - '0')*1);
+        //aAxisValue = (int16_t)((rxBuf[13]  - '0')*100 + (rxBuf[14]  - '0')*10 + (rxBuf[15]  - '0')*1);
           
         xAxisCm = ((float)xAxisValue-100)/10.0;
         yAxisCm = ((float)yAxisValue)/10.0;
@@ -1196,25 +1207,29 @@ void StartCommTask(void const * argument)
           servo3NewPosRef = deg2dc(finalJointAngles3Axis.jointZAngle);
           servo2NewPosRef = deg2dc(finalJointAngles3Axis.jointYAngle);
           servo1NewPosRef = xRotate2dc(finalJointAngles3Axis.jointXAngle);
-          servo4NewPosRef = receivedGrip2dc(aAxisValue);
+          servo4NewPosRef = gripRotate2dc(finalJointAngles3Axis.jointXAngle);
+          targetStepSizeVar = 0.024;
           
           if ((absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo2NewPosRef-servo2CurrPos)) && (absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
             servo3StepSize = targetStepSizeVar;
             numberOfSteps = absfloat(servo3NewPosRef-servo3CurrPos)/targetStepSizeVar;
             servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
             servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
+            servo4StepSize = absfloat(servo4NewPosRef-servo4CurrPos)/numberOfSteps;
           }
           else if ((absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo3NewPosRef-servo3CurrPos)) && (absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
             servo2StepSize = targetStepSizeVar;
             numberOfSteps = absfloat(servo2NewPosRef-servo2CurrPos)/targetStepSizeVar;
             servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
             servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
+            servo4StepSize = absfloat(servo4NewPosRef-servo4CurrPos)/numberOfSteps;
           }
           else{
             servo1StepSize = targetStepSizeVar;
             numberOfSteps = absfloat(servo1NewPosRef-servo1CurrPos)/targetStepSizeVar;
             servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
             servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
+            servo4StepSize = absfloat(servo4NewPosRef-servo4CurrPos)/numberOfSteps;
           }
         }
         sprintf(txBuf, "OK: %s\r", rxBuf);
@@ -1488,6 +1503,117 @@ void StartTsTask(void const * argument)
     osDelay(10);
   }
   /* USER CODE END StartTsTask */
+}
+
+/* StartOldGraphicsTask function */
+void StartOldGraphicsTask(void const * argument)
+{
+  /* USER CODE BEGIN StartOldGraphicsTask */
+  int elapsedTime = 0;
+  char textBuf[30];
+  float verLinkAngleAfterRefresh = 0;
+  float horLinkAngleAfterRefresh = 0;
+  float turnAngleAfterRefresh = 0;
+  
+  XYCoordinates endPoint;
+  //JointAngles finalJointAngles;
+  
+  
+  /* Infinite loop */
+  for(;;)
+  {
+    BSP_LED_Toggle(LED4);
+    if ((BSP_PB_GetState(BUTTON_KEY) == SET) && (elapsedTime > 10)){
+      //mode++;
+      //cycleRepeat = 1;
+      cycleRepeat ^= 1;
+      BSP_LCD_DisplayChar(5,25,(char)(cycleRepeat+48));
+      elapsedTime = 0;
+    }
+    
+    if (elapsedTime < 100){
+      elapsedTime+=1;
+    }
+    
+    verLinkAngle = dc2deg(servo3CurrPos);
+    horLinkAngle = dc2deg(servo2CurrPos);
+    turnAngle    = dc2turnDeg(servo1CurrPos - servo1calib);
+    
+    sprintf(textBuf, "V joint: %.2f deg",  verLinkAngle);
+    BSP_LCD_DisplayStringAt(5, 45, (unsigned char*) textBuf, LEFT_MODE);
+    sprintf(textBuf, "H joint: %.2f deg",  horLinkAngle);
+    BSP_LCD_DisplayStringAt(5, 60, (unsigned char*) textBuf, LEFT_MODE);
+    
+    
+    endPoint = calculateForwardKinematics(verLinkAngle,horLinkAngle);
+    
+    sprintf(textBuf, "X: %.1f cm", (endPoint.X*100));
+    BSP_LCD_DisplayStringAt(5, 75, (unsigned char*) textBuf, LEFT_MODE);
+    sprintf(textBuf, "Y: %.1f cm", (endPoint.Y*100));
+    BSP_LCD_DisplayStringAt(5, 90, (unsigned char*) textBuf, LEFT_MODE);
+    
+    if (((verLinkAngleAfterRefresh != verLinkAngle) || (horLinkAngleAfterRefresh != horLinkAngle) || (turnAngleAfterRefresh != turnAngle)) && (graphicsEna)) {
+      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+      BSP_LCD_FillRect(5,135,230,180);
+      BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+      
+      verLinkAngleAfterRefresh = verLinkAngle;
+      horLinkAngleAfterRefresh = horLinkAngle;
+      turnAngleAfterRefresh    = turnAngle;
+      
+      verLinkPoints[0].X = 45;
+      verLinkPoints[0].Y = 250;
+      verLinkPoints[1].X = verLinkPoints[0].X + 10;
+      verLinkPoints[1].Y = verLinkPoints[0].Y;
+      
+      verLinkPoints[3].X = (int16_t)(verLinkPoints[0].X + (74.25*cosf(deg2rad(verLinkAngle))));
+      verLinkPoints[3].Y = (int16_t)(verLinkPoints[0].Y - (74.25*sinf(deg2rad(verLinkAngle))));
+      verLinkPoints[2].X = verLinkPoints[3].X + 10;
+      verLinkPoints[2].Y = verLinkPoints[3].Y;
+      
+      horLinkPoints[0].X = verLinkPoints[2].X;
+      horLinkPoints[0].Y = verLinkPoints[2].Y;
+      horLinkPoints[1].X = verLinkPoints[2].X;
+      horLinkPoints[1].Y = verLinkPoints[2].Y + 10;
+      
+      horLinkPoints[3].X = (int16_t)(horLinkPoints[0].X + (82.5*cosf(deg2rad(horLinkAngle))));
+      horLinkPoints[3].Y = (int16_t)(horLinkPoints[0].Y + (82.5*sinf(deg2rad(horLinkAngle))));
+      horLinkPoints[2].X = horLinkPoints[3].X;
+      horLinkPoints[2].Y = horLinkPoints[3].Y + 10; 
+        
+      BSP_LCD_FillRect(30, 250, 40, 40);
+      BSP_LCD_FillPolygon(verLinkPoints, 4);
+      BSP_LCD_FillPolygon(horLinkPoints, 4);
+      BSP_LCD_FillRect(horLinkPoints[3].X, horLinkPoints[3].Y, 30, 10);
+      
+      BSP_LCD_FillCircle(50,250,10);
+      BSP_LCD_FillCircle(verLinkPoints[3].X+5,verLinkPoints[3].Y+5,10);
+      BSP_LCD_FillCircle(horLinkPoints[3].X,horLinkPoints[3].Y+5,10);
+      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+      BSP_LCD_FillCircle(50,250,5);
+      BSP_LCD_FillCircle(verLinkPoints[3].X+5,verLinkPoints[3].Y+5,5);
+      BSP_LCD_FillCircle(horLinkPoints[3].X,horLinkPoints[3].Y+5,5);
+      BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+      
+      if (turnAngle < -0.1){
+        sprintf(textBuf, "   %.1f ->",  (turnAngle*-1));
+      }
+      else if (turnAngle > 0.1){
+        sprintf(textBuf, "<- %.1f",  turnAngle);
+      }
+      else {
+        sprintf(textBuf, "   %.1f",  turnAngle);
+      }
+      BSP_LCD_SetFont(&Font12);
+      BSP_LCD_DisplayStringAt(15, 300, (unsigned char*) textBuf, LEFT_MODE);
+      BSP_LCD_SetFont(&Font16);
+    }
+    
+    
+    
+    osDelay(500);
+  }
+  /* USER CODE END StartOldGraphicsTask */
 }
 
 /**

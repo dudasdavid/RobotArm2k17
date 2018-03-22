@@ -75,8 +75,9 @@
 /** @defgroup STM32F429I_DISCOVERY_SDRAM_Private_Variables STM32F429I DISCOVERY SDRAM Private Variables
   * @{
   */
-static SDRAM_HandleTypeDef SdramHandle;
-static FMC_SDRAM_TimingTypeDef Timing;
+//static SDRAM_HandleTypeDef hsdram1;
+extern SDRAM_HandleTypeDef hsdram1;
+//static FMC_SDRAM_TimingTypeDef Timing;
 static FMC_SDRAM_CommandTypeDef Command;
 /**
   * @}
@@ -98,59 +99,60 @@ static FMC_SDRAM_CommandTypeDef Command;
   */
 uint8_t BSP_SDRAM_Init(void)
 {
-  static uint8_t sdramstatus = SDRAM_ERROR;
+  //static uint8_t sdramstatus = SDRAM_ERROR;
 
   /* SDRAM device configuration */
-  SdramHandle.Instance = FMC_SDRAM_DEVICE;
+  //hsdram1.Instance = FMC_SDRAM_DEVICE;
 
   /* FMC Configuration -------------------------------------------------------*/
   /* FMC SDRAM Bank configuration */
   /* Timing configuration for 90 Mhz of SD clock frequency (180Mhz/2) */
   /* TMRD: 2 Clock cycles */
-  Timing.LoadToActiveDelay    = 2;
+  //Timing.LoadToActiveDelay    = 2;
   /* TXSR: min=70ns (7x11.11ns) */
-  Timing.ExitSelfRefreshDelay = 7;
+  //Timing.ExitSelfRefreshDelay = 7;
   /* TRAS: min=42ns (4x11.11ns) max=120k (ns) */
-  Timing.SelfRefreshTime      = 4;
+  //Timing.SelfRefreshTime      = 4;
   /* TRC:  min=70 (7x11.11ns) */
-  Timing.RowCycleDelay        = 7;
+  //Timing.RowCycleDelay        = 7;
   /* TWR:  min=1+ 7ns (1+1x11.11ns) */
-  Timing.WriteRecoveryTime    = 2;
+  //Timing.WriteRecoveryTime    = 2;
   /* TRP:  20ns => 2x11.11ns*/
-  Timing.RPDelay              = 2;
+  //Timing.RPDelay              = 2;
   /* TRCD: 20ns => 2x11.11ns */
-  Timing.RCDDelay             = 2;
+  //Timing.RCDDelay             = 2;
   
   /* FMC SDRAM control configuration */
-  SdramHandle.Init.SDBank             = FMC_SDRAM_BANK2;
+  //hsdram1.Init.SDBank             = FMC_SDRAM_BANK2;
   /* Row addressing: [7:0] */
-  SdramHandle.Init.ColumnBitsNumber   = FMC_SDRAM_COLUMN_BITS_NUM_8;
+  //hsdram1.Init.ColumnBitsNumber   = FMC_SDRAM_COLUMN_BITS_NUM_8;
   /* Column addressing: [11:0] */
-  SdramHandle.Init.RowBitsNumber      = FMC_SDRAM_ROW_BITS_NUM_12;
-  SdramHandle.Init.MemoryDataWidth    = SDRAM_MEMORY_WIDTH;
-  SdramHandle.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
-  SdramHandle.Init.CASLatency         = SDRAM_CAS_LATENCY;
-  SdramHandle.Init.WriteProtection    = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
-  SdramHandle.Init.SDClockPeriod      = SDCLOCK_PERIOD;
-  SdramHandle.Init.ReadBurst          = SDRAM_READBURST;
-  SdramHandle.Init.ReadPipeDelay      = FMC_SDRAM_RPIPE_DELAY_1;
+  //hsdram1.Init.RowBitsNumber      = FMC_SDRAM_ROW_BITS_NUM_12;
+  //hsdram1.Init.MemoryDataWidth    = SDRAM_MEMORY_WIDTH;
+  //hsdram1.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
+  //hsdram1.Init.CASLatency         = SDRAM_CAS_LATENCY;
+  //hsdram1.Init.WriteProtection    = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
+  //hsdram1.Init.SDClockPeriod      = SDCLOCK_PERIOD;
+  //hsdram1.Init.ReadBurst          = SDRAM_READBURST;
+  //hsdram1.Init.ReadPipeDelay      = FMC_SDRAM_RPIPE_DELAY_1;
                     
   /* SDRAM controller initialization */
   /* __weak function can be surcharged by the application code */
-  BSP_SDRAM_MspInit(&SdramHandle, (void *)NULL);
-  if(HAL_SDRAM_Init(&SdramHandle, &Timing) != HAL_OK)
-  {
-    sdramstatus = SDRAM_ERROR;
-  }
-  else
-  {
-    sdramstatus = SDRAM_OK;
-  }
+  
+  //BSP_SDRAM_MspInit(&hsdram1, (void *)NULL);
+  //if(HAL_SDRAM_Init(&SdramHandle, &Timing) != HAL_OK)
+  //{
+  //  sdramstatus = SDRAM_ERROR;
+  //}
+  //else
+  //{
+  //  sdramstatus = SDRAM_OK;
+  //}
   
   /* SDRAM initialization sequence */
   BSP_SDRAM_Initialization_sequence(REFRESH_COUNT);
   
-  return sdramstatus;
+  return 0;// sdramstatus;
 }
 
 /**
@@ -168,7 +170,7 @@ void BSP_SDRAM_Initialization_sequence(uint32_t RefreshCount)
   Command.ModeRegisterDefinition  = 0;
 
   /* Send the command */
-  HAL_SDRAM_SendCommand(&SdramHandle, &Command, SDRAM_TIMEOUT);
+  HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT);
 
   /* Step 2: Insert 100 us minimum delay */ 
   /* Inserted delay is equal to 1 ms due to systick time base unit (ms) */
@@ -181,7 +183,7 @@ void BSP_SDRAM_Initialization_sequence(uint32_t RefreshCount)
   Command.ModeRegisterDefinition  = 0;
 
   /* Send the command */
-  HAL_SDRAM_SendCommand(&SdramHandle, &Command, SDRAM_TIMEOUT);  
+  HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT);  
   
   /* Step 4: Configure an Auto Refresh command */ 
   Command.CommandMode             = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
@@ -190,7 +192,7 @@ void BSP_SDRAM_Initialization_sequence(uint32_t RefreshCount)
   Command.ModeRegisterDefinition  = 0;
 
   /* Send the command */
-  HAL_SDRAM_SendCommand(&SdramHandle, &Command, SDRAM_TIMEOUT);
+  HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT);
   
   /* Step 5: Program the external memory mode register */
   tmpmrd = (uint32_t)SDRAM_MODEREG_BURST_LENGTH_1          |
@@ -205,11 +207,11 @@ void BSP_SDRAM_Initialization_sequence(uint32_t RefreshCount)
   Command.ModeRegisterDefinition  = tmpmrd;
 
   /* Send the command */
-  HAL_SDRAM_SendCommand(&SdramHandle, &Command, SDRAM_TIMEOUT);
+  HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT);
   
   /* Step 6: Set the refresh rate counter */
   /* Set the device refresh rate */
-  HAL_SDRAM_ProgramRefreshRate(&SdramHandle, RefreshCount); 
+  HAL_SDRAM_ProgramRefreshRate(&hsdram1, RefreshCount); 
 }
 
 /**
@@ -220,7 +222,7 @@ void BSP_SDRAM_Initialization_sequence(uint32_t RefreshCount)
   */
 uint8_t BSP_SDRAM_ReadData(uint32_t uwStartAddress, uint32_t *pData, uint32_t uwDataSize)
 {
-  if(HAL_SDRAM_Read_32b(&SdramHandle, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
+  if(HAL_SDRAM_Read_32b(&hsdram1, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
   {
     return SDRAM_ERROR;
   }
@@ -238,7 +240,7 @@ uint8_t BSP_SDRAM_ReadData(uint32_t uwStartAddress, uint32_t *pData, uint32_t uw
   */
 uint8_t BSP_SDRAM_ReadData_DMA(uint32_t uwStartAddress, uint32_t *pData, uint32_t uwDataSize) 
 {
-  if(HAL_SDRAM_Read_DMA(&SdramHandle, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
+  if(HAL_SDRAM_Read_DMA(&hsdram1, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
   {
     return SDRAM_ERROR;
   }
@@ -257,10 +259,10 @@ uint8_t BSP_SDRAM_ReadData_DMA(uint32_t uwStartAddress, uint32_t *pData, uint32_
 uint8_t BSP_SDRAM_WriteData(uint32_t uwStartAddress, uint32_t *pData, uint32_t uwDataSize) 
 {
   /* Disable write protection */
-  HAL_SDRAM_WriteProtection_Disable(&SdramHandle);
+  HAL_SDRAM_WriteProtection_Disable(&hsdram1);
   
   /*Write 32-bit data buffer to SDRAM memory*/
-  if(HAL_SDRAM_Write_32b(&SdramHandle, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
+  if(HAL_SDRAM_Write_32b(&hsdram1, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
   {
     return SDRAM_ERROR;
   }
@@ -278,7 +280,7 @@ uint8_t BSP_SDRAM_WriteData(uint32_t uwStartAddress, uint32_t *pData, uint32_t u
   */
 uint8_t BSP_SDRAM_WriteData_DMA(uint32_t uwStartAddress, uint32_t *pData, uint32_t uwDataSize) 
 {
-  if(HAL_SDRAM_Write_DMA(&SdramHandle, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
+  if(HAL_SDRAM_Write_DMA(&hsdram1, (uint32_t *)uwStartAddress, pData, uwDataSize) != HAL_OK)
   {
     return SDRAM_ERROR;
   }
@@ -295,7 +297,7 @@ uint8_t BSP_SDRAM_WriteData_DMA(uint32_t uwStartAddress, uint32_t *pData, uint32
   */  
 uint8_t BSP_SDRAM_Sendcmd(FMC_SDRAM_CommandTypeDef *SdramCmd)
 {
-  if(HAL_SDRAM_SendCommand(&SdramHandle, SdramCmd, SDRAM_TIMEOUT) != HAL_OK)
+  if(HAL_SDRAM_SendCommand(&hsdram1, SdramCmd, SDRAM_TIMEOUT) != HAL_OK)
   {
     return SDRAM_ERROR;
   }
@@ -310,7 +312,7 @@ uint8_t BSP_SDRAM_Sendcmd(FMC_SDRAM_CommandTypeDef *SdramCmd)
   */
 void BSP_SDRAM_DMA_IRQHandler(void)
 {
-  HAL_DMA_IRQHandler(SdramHandle.hdma); 
+  HAL_DMA_IRQHandler(hsdram1.hdma); 
 }
 
 /**
@@ -423,7 +425,7 @@ __weak void BSP_SDRAM_MspInit(SDRAM_HandleTypeDef  *hsdram, void *Params)
   __HAL_LINKDMA(hsdram, hdma, dmaHandle);
   
   /* Deinitialize the stream for new transfer */
-  HAL_DMA_DeInit(&dmaHandle);
+  //HAL_DMA_DeInit(&dmaHandle);
   
   /* Configure the DMA stream */
   HAL_DMA_Init(&dmaHandle); 

@@ -277,7 +277,7 @@
         <option>
           <name>CCAllowList</name>
           <version>1</version>
-          <state>11111110</state>
+          <state>10010100</state>
         </option>
         <option>
           <name>CCDebugInfo</name>
@@ -361,6 +361,11 @@
           <state />
           <state />
           <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
         </option>
         <option>
           <name>CCStdIncCheck</name>
@@ -385,7 +390,7 @@
         </option>
         <option>
           <name>CCOptLevelSlave</name>
-          <state>3</state>
+          <state>2</state>
         </option>
         <option>
           <name>CompilerMisraRules98</name>
@@ -444,7 +449,7 @@
         <option>
           <name>CCOptStrategySlave</name>
           <version>0</version>
-          <state>1</state>
+          <state>0</state>
         </option>
         <option>
           <name>CCGuardCalls</name>
@@ -1114,12 +1119,36 @@
   <group>
     <name>Drivers</name>
     <group>
+      <name>BSP</name>
+      <group>
+        <name>Components</name>
+      </group>
+    </group>
+    <group>
+      <name>CMSIS</name>
+      <file>
+        <name>$PROJ_DIR$\..\Src\system_stm32f4xx.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/..//Src/system_stm32f4xx.c</name>
+      </file>
+    </group>
+    <group>
       <name>STM32F4xx_HAL_Driver</name>
       <file>
         <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal.c</name>
       </file>
       <file>
+        <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_adc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_adc_ex.c</name>
+      </file>
+      <file>
         <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_cortex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_crc.c</name>
       </file>
       <file>
         <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma.c</name>
@@ -1198,21 +1227,6 @@
       </file>
       <file>
         <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_ll_usb.c</name>
-      </file>
-    </group>
-    <group>
-      <name>CMSIS</name>
-      <excluded>
-        <configuration />
-      </excluded>
-      <file>
-        <name />
-        <excluded>
-          <configuration />
-        </excluded>
-      </file>
-      <file>
-        <name>$PROJ_DIR$/..//Src/system_stm32f4xx.c</name>
       </file>
     </group>
   </group>
