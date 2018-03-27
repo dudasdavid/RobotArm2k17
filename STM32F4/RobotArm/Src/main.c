@@ -65,11 +65,7 @@ DMA_HandleTypeDef hdma_adc1;
 
 CRC_HandleTypeDef hcrc;
 
-DMA2D_HandleTypeDef hdma2d;
-
 I2C_HandleTypeDef hi2c3;
-
-LTDC_HandleTypeDef hltdc;
 
 RNG_HandleTypeDef hrng;
 
@@ -81,8 +77,6 @@ TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart5;
 
-SDRAM_HandleTypeDef hsdram1;
-
 osThreadId defaultTaskHandle;
 osThreadId commTaskHandle;
 osThreadId sensorTaskHandle;
@@ -93,15 +87,22 @@ osThreadId oldGraphicsTaskHandle;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-#define LCD_FRAME_BUFFER_LAYER0                  (LCD_FRAME_BUFFER+0x130000)
-#define LCD_FRAME_BUFFER_LAYER1                  LCD_FRAME_BUFFER
+//#define LCD_FRAME_BUFFER_LAYER0                  (LCD_FRAME_BUFFER+0x130000)
+//#define LCD_FRAME_BUFFER_LAYER1                  LCD_FRAME_BUFFER
 #define F32_PI 3.1415927
-
+#define BACKGROUND_COLOR LCD_COLOR_BLACK
 typedef struct 
 {
   float X;
   float Y;
 } XYCoordinates;
+
+typedef struct 
+{
+  float X;
+  float Y;
+  float Z;
+} XYZCoordinates;
 
 typedef struct 
 {
@@ -179,11 +180,28 @@ Point verLinkPoints[4];
 Point horLinkPoints[4];
 
 XYCoordinates coordinates;
+XYZCoordinates coordinatesXYZ;
 JointAngles calculatedAngles;
 JointAngles3Axis calculatedAngles3Axis;
 
 static volatile uint32_t ADC_Buf[3];
 static volatile uint32_t val[3];
+static volatile float pressLength = 0;
+
+static volatile int PenControlActive = 0;
+
+static uint32_t TSx = 0, TSy = 0;
+
+static volatile float pressThreshold = 0.5;
+static volatile float pressTarget = 1.8;
+
+static volatile uint32_t taskCounterDefaultTask     = 0;
+static volatile uint32_t taskCounterCommTask        = 0;
+static volatile uint32_t taskCounterSensorTask      = 0;
+static volatile uint32_t taskCounterControlTask     = 0;
+static volatile uint32_t taskCounterServoRampTask   = 0;
+static volatile uint32_t taskCounterTsTask          = 0;
+static volatile uint32_t taskCounterOldGraphicsTask = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -199,9 +217,9 @@ static void MX_I2C3_Init(void);
 static void MX_RNG_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_CRC_Init(void);
-static void MX_DMA2D_Init(void);
-static void MX_FMC_Init(void);
-static void MX_LTDC_Init(void);
+extern void GRAPHICS_HW_Init(void);
+extern void GRAPHICS_Init(void);
+extern void GRAPHICS_MainTask(void);
 void StartDefaultTask(void const * argument);
 void StartCommTask(void const * argument);
 void StartSensorTask(void const * argument);
@@ -271,9 +289,6 @@ int main(void)
   MX_RNG_Init();
   MX_ADC1_Init();
   MX_CRC_Init();
-  MX_DMA2D_Init();
-  MX_FMC_Init();
-  MX_LTDC_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);    //servoPWM1
   HAL_TIMEx_PWMN_Start(&htim2, TIM_CHANNEL_1);
@@ -307,30 +322,26 @@ int main(void)
   
   /*##-1- LCD Initialization #################################################*/ 
   /* Initialize the LCD */
+  /*
   BSP_LCD_Init();
-  
-  
   BSP_LCD_LayerDefaultInit(0, LCD_FRAME_BUFFER_LAYER0);
-  BSP_LCD_SelectLayer(0);
-  
-  BSP_LCD_Clear(LCD_COLOR_BLACK);
-  BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetTextColor(LCD_COLOR_CYAN);
-  BSP_LCD_SetFont(&Font16);
-  BSP_LCD_DrawRect(0,0,239,319);
-  BSP_LCD_DisplayStringAt(5,8,"RobotArm Control 2.0",LEFT_MODE);
-  BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
-  //BSP_LCD_DisplayStringAt(5,30,"RobotArm Control 2.0",LEFT_MODE);
-  //BSP_LCD_FillCircle(120, 160, 80);
-
+  */
   
   //BSP_LCD_SetFont(&Font24);
   //Touchscreen_Calibration();
-  BSP_TS_Init(240, 320);
+  BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
   
   
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buf,3);
+  
   /* USER CODE END 2 */
+
+/* Initialise the graphical hardware */
+  GRAPHICS_HW_Init();
+
+  /* Initialise the graphical stack engine */
+  GRAPHICS_Init();
+      
+  
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -424,17 +435,10 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-    /**Activate the Over-Drive mode 
-    */
-  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -541,30 +545,6 @@ static void MX_CRC_Init(void)
 
 }
 
-/* DMA2D init function */
-static void MX_DMA2D_Init(void)
-{
-
-  hdma2d.Instance = DMA2D;
-  hdma2d.Init.Mode = DMA2D_M2M;
-  hdma2d.Init.ColorMode = DMA2D_OUTPUT_ARGB8888;
-  hdma2d.Init.OutputOffset = 0;
-  hdma2d.LayerCfg[1].InputOffset = 0;
-  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_ARGB8888;
-  hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
-  hdma2d.LayerCfg[1].InputAlpha = 0xFF;
-  if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  if (HAL_DMA2D_ConfigLayer(&hdma2d, 1) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
-
 /* I2C3 init function */
 static void MX_I2C3_Init(void)
 {
@@ -579,55 +559,6 @@ static void MX_I2C3_Init(void)
   hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
   hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
   if (HAL_I2C_Init(&hi2c3) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
-
-/* LTDC init function */
-static void MX_LTDC_Init(void)
-{
-
-  LTDC_LayerCfgTypeDef pLayerCfg;
-
-  hltdc.Instance = LTDC;
-  hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
-  hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;
-  hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;
-  hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
-  hltdc.Init.HorizontalSync = 9;
-  hltdc.Init.VerticalSync = 1;
-  hltdc.Init.AccumulatedHBP = 29;
-  hltdc.Init.AccumulatedVBP = 3;
-  hltdc.Init.AccumulatedActiveW = 269;
-  hltdc.Init.AccumulatedActiveH = 323;
-  hltdc.Init.TotalWidth = 279;
-  hltdc.Init.TotalHeigh = 327;
-  hltdc.Init.Backcolor.Blue = 0;
-  hltdc.Init.Backcolor.Green = 0;
-  hltdc.Init.Backcolor.Red = 0;
-  if (HAL_LTDC_Init(&hltdc) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  pLayerCfg.WindowX0 = 0;
-  pLayerCfg.WindowX1 = 240;
-  pLayerCfg.WindowY0 = 0;
-  pLayerCfg.WindowY1 = 320;
-  pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_ARGB8888;
-  pLayerCfg.Alpha = 255;
-  pLayerCfg.Alpha0 = 0;
-  pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
-  pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
-  pLayerCfg.FBStartAdress = 0xD0200000;
-  pLayerCfg.ImageWidth = 240;
-  pLayerCfg.ImageHeight = 320;
-  pLayerCfg.Backcolor.Blue = 0;
-  pLayerCfg.Backcolor.Green = 0;
-  pLayerCfg.Backcolor.Red = 0;
-  if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 0) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -678,7 +609,7 @@ static void MX_TIM2_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 3;
+  htim2.Init.Prescaler = 13;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 60000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -720,7 +651,7 @@ static void MX_TIM3_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 3;
+  htim3.Init.Prescaler = 13;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 60000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -762,7 +693,7 @@ static void MX_TIM4_Init(void)
   TIM_OC_InitTypeDef sConfigOC;
 
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 3;
+  htim4.Init.Prescaler = 13;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 60000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -822,40 +753,6 @@ static void MX_DMA_Init(void)
   /* DMA2_Stream4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
-
-}
-/* FMC initialization function */
-static void MX_FMC_Init(void)
-{
-  FMC_SDRAM_TimingTypeDef SdramTiming;
-
-  /** Perform the SDRAM1 memory initialization sequence
-  */
-  hsdram1.Instance = FMC_SDRAM_DEVICE;
-  /* hsdram1.Init */
-  hsdram1.Init.SDBank = FMC_SDRAM_BANK2;
-  hsdram1.Init.ColumnBitsNumber = FMC_SDRAM_COLUMN_BITS_NUM_8;
-  hsdram1.Init.RowBitsNumber = FMC_SDRAM_ROW_BITS_NUM_12;
-  hsdram1.Init.MemoryDataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16;
-  hsdram1.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
-  hsdram1.Init.CASLatency = FMC_SDRAM_CAS_LATENCY_3;
-  hsdram1.Init.WriteProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
-  hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
-  hsdram1.Init.ReadBurst = FMC_SDRAM_RBURST_DISABLE;
-  hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_1;
-  /* SdramTiming */
-  SdramTiming.LoadToActiveDelay = 2;
-  SdramTiming.ExitSelfRefreshDelay = 7;
-  SdramTiming.SelfRefreshTime = 4;
-  SdramTiming.RowCycleDelay = 7;
-  SdramTiming.WriteRecoveryTime = 3;
-  SdramTiming.RPDelay = 2;
-  SdramTiming.RCDDelay = 2;
-
-  if (HAL_SDRAM_Init(&hsdram1, &SdramTiming) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
 
 }
 
@@ -997,7 +894,7 @@ float gripRotate2dc(float angleDeg) {
 }
 
 float dc2turnDeg(float dc){
-  return ((dc - 7.5)*9);
+  return ((dc -7.5)*8);
 }
 
 float receivedGrip2dc(uint16_t gripValue){
@@ -1010,6 +907,15 @@ XYCoordinates calculateForwardKinematics(float joint1Angle, float joint2Angle){
   coordinates.Y = verLinkLength * sinf(deg2rad(joint1Angle)) - horLinkLength * sinf(deg2rad(joint2Angle));
   
   return coordinates;
+}
+
+XYZCoordinates calculateForwardKinematicsXYZ(float jointRotAngle, float joint1Angle, float joint2Angle){
+  
+  coordinatesXYZ.Y = verLinkLength * cosf(deg2rad(joint1Angle)) + horLinkLength * cosf(deg2rad(joint2Angle));
+  coordinatesXYZ.Z = verLinkLength * sinf(deg2rad(joint1Angle)) - horLinkLength * sinf(deg2rad(joint2Angle));
+  coordinatesXYZ.X = tanf(deg2rad(jointRotAngle))*coordinatesXYZ.Y;
+  
+  return coordinatesXYZ;
 }
 
 JointAngles calculateInverseKinematics(float xPos, float yPos){
@@ -1079,6 +985,10 @@ JointAngles3Axis calculateInverseKinematics3Axis(float xPos, float yPos, float z
   return calculatedAngles3Axis;
 }
 
+float convertADCtomm(uint32_t in){
+  return in/500.0;
+}
+
 /**
    * @brief Count characters in char array
 	 * @param ptr: pointer to char array
@@ -1103,12 +1013,16 @@ void StartDefaultTask(void const * argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
 
+/* Graphic application */  
+  GRAPHICS_MainTask();
+
   /* USER CODE BEGIN 5 */
   
   /* Infinite loop */
   for(;;)
   {
     osDelay(500);
+    taskCounterDefaultTask++;
   }
   /* USER CODE END 5 */ 
 }
@@ -1147,7 +1061,7 @@ void StartCommTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-
+    BSP_LED_Toggle(LED3);
     if (receiveState == 1){
 
       if ( (rxBuf[0] == 'S') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == ';') && (rxBuf[16] == '\r')) { // check the frame
@@ -1236,6 +1150,9 @@ void StartCommTask(void const * argument)
         Len = SizeofCharArray((char*)txBuf);
         CDC_Transmit_HS((uint8_t*)txBuf, Len);
       }
+      else if ((rxBuf[0] == 'P') && (rxBuf[1] == 'E') && (rxBuf[2] == 'N') && (rxBuf[4] == '\r')){
+        PenControlActive = (int16_t)(rxBuf[3]  - '0');
+      }
       else{
         sprintf(txBuf, "ERR: %s\r", rxBuf);
         Len = SizeofCharArray((char*)txBuf);
@@ -1247,6 +1164,7 @@ void StartCommTask(void const * argument)
 
     }
     osDelay(1000);
+    taskCounterCommTask++;
   }
   /* USER CODE END StartCommTask */
 }
@@ -1255,10 +1173,13 @@ void StartCommTask(void const * argument)
 void StartSensorTask(void const * argument)
 {
   /* USER CODE BEGIN StartSensorTask */
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buf,3);
   /* Infinite loop */
   for(;;)
   {
+    pressLength = convertADCtomm(val[0]);
     osDelay(10);
+    taskCounterSensorTask++;
   }
   /* USER CODE END StartSensorTask */
 }
@@ -1362,11 +1283,30 @@ void StartControlTask(void const * argument)
       }
     }
     
-    TIM2->CCR1 = (int)(servo1NewPos*120000/100);//7.5 = 1.5ms
-    TIM2->CCR2 = (int)(servo2NewPos*120000/100);//10 = 2ms
-    TIM3->CCR1 = (int)(servo3NewPos*120000/100);//5 = 1ms
-    TIM3->CCR3 = (int)(servo4NewPos*120000/100);
-    TIM4->CCR2 = (int)(servo5NewPos*120000/100);
+    if (PenControlActive == 1){
+      if ((pressLength - pressTarget) < -pressThreshold){
+        servo3NewPos = servo3CurrPos+0.02;
+        saturateFloat(&servo3NewPos, servo3Min, servo3Max);
+      }
+      else if ((pressLength - pressTarget) > pressThreshold){
+        servo3NewPos = servo3CurrPos-0.02;
+        saturateFloat(&servo3NewPos, servo3Min, servo3Max);
+      }
+      else {
+        servo3NewPos = servo3CurrPos;
+      }
+      if ((servo3NewPos == servo3Min) || (servo3NewPos == servo3Max)){
+        PenControlActive = 0;
+      }
+    }
+    
+    
+    
+    TIM2->CCR1 = (int)(servo1NewPos*60000*2/100);//7.5 = 1.5ms
+    TIM2->CCR2 = (int)(servo2NewPos*60000*2/100);//10 = 2ms
+    TIM3->CCR1 = (int)(servo3NewPos*60000*2/100);//5 = 1ms
+    TIM3->CCR3 = (int)(servo4NewPos*60000*2/100);
+    TIM4->CCR2 = (int)(servo5NewPos*60000*2/100);
     
     servo1CurrPos = servo1NewPos;
     servo2CurrPos = servo2NewPos;
@@ -1375,6 +1315,7 @@ void StartControlTask(void const * argument)
     servo5CurrPos = servo5NewPos;
     
     osDelay(10);
+    taskCounterControlTask++;
   }
   /* USER CODE END StartControlTask */
 }
@@ -1468,9 +1409,11 @@ void StartServoRampTask(void const * argument)
       
       taskCounter++;
       osDelay(taskDelay);
+      taskCounterServoRampTask++;
     }
     else{
       osDelay(500);
+      taskCounterServoRampTask++;
     }
   }
   /* USER CODE END StartServoRampTask */
@@ -1481,26 +1424,28 @@ void StartTsTask(void const * argument)
 {
   /* USER CODE BEGIN StartTsTask */
   TS_StateTypeDef  State;
-  static uint32_t x = 0, y = 0;
+  
   /* Infinite loop */
   for(;;)
   {
     BSP_TS_GetState(&State);
 
-    x = State.X;
-    y = State.Y; 
-    /*
+    TSx = State.X;
+    TSy = State.Y; 
+    
     if (State.TouchDetected){
-      BSP_LCD_DrawCircle(x,y,3);
       BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
-      BSP_LCD_FillCircle(120, 160, 80);
+      BSP_LCD_DrawCircle(TSx,TSy,3);
+      BSP_LCD_SetTextColor(BACKGROUND_COLOR);
+      //BSP_LCD_FillCircle(120, 160, 80);
     }
     else{
-      BSP_LCD_SetTextColor(LCD_COLOR_RED);
-      BSP_LCD_FillCircle(120, 160, 80);
+      //BSP_LCD_SetTextColor(LCD_COLOR_RED);
+      //BSP_LCD_FillCircle(120, 160, 80);
     }
-    */
-    osDelay(10);
+    
+    osDelay(100);
+    taskCounterTsTask++;
   }
   /* USER CODE END StartTsTask */
 }
@@ -1515,14 +1460,23 @@ void StartOldGraphicsTask(void const * argument)
   float horLinkAngleAfterRefresh = 0;
   float turnAngleAfterRefresh = 0;
   
-  XYCoordinates endPoint;
+  XYZCoordinates endPoint;
   //JointAngles finalJointAngles;
+  osDelay(1000);
   
+  BSP_LCD_SelectLayer(0);
+  
+  BSP_LCD_Clear(LCD_COLOR_BLACK);
+  BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
+  BSP_LCD_SetTextColor(LCD_COLOR_CYAN);
+  BSP_LCD_SetFont(&Font16);
+  BSP_LCD_DrawRect(0,0,239,319);
+  BSP_LCD_DisplayStringAt(5,8,"RobotArm Control 2.0",LEFT_MODE);
+  BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
   
   /* Infinite loop */
   for(;;)
   {
-    BSP_LED_Toggle(LED4);
     if ((BSP_PB_GetState(BUTTON_KEY) == SET) && (elapsedTime > 10)){
       //mode++;
       //cycleRepeat = 1;
@@ -1539,17 +1493,22 @@ void StartOldGraphicsTask(void const * argument)
     horLinkAngle = dc2deg(servo2CurrPos);
     turnAngle    = dc2turnDeg(servo1CurrPos - servo1calib);
     
-    sprintf(textBuf, "V joint: %.2f deg",  verLinkAngle);
+    //sprintf(textBuf, "V joint: %.2f deg",  verLinkAngle);
+    //BSP_LCD_DisplayStringAt(5, 45, (unsigned char*) textBuf, LEFT_MODE);
+    //sprintf(textBuf, "H joint: %.2f deg",  horLinkAngle);
+    //BSP_LCD_DisplayStringAt(5, 60, (unsigned char*) textBuf, LEFT_MODE);
+    
+    
+    endPoint = calculateForwardKinematicsXYZ(turnAngle,verLinkAngle,horLinkAngle);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    sprintf(textBuf, "X: %.1f cm    ", (endPoint.X*100));
     BSP_LCD_DisplayStringAt(5, 45, (unsigned char*) textBuf, LEFT_MODE);
-    sprintf(textBuf, "H joint: %.2f deg",  horLinkAngle);
+    sprintf(textBuf, "Y: %.1f cm    ", (endPoint.Y*100));
     BSP_LCD_DisplayStringAt(5, 60, (unsigned char*) textBuf, LEFT_MODE);
-    
-    
-    endPoint = calculateForwardKinematics(verLinkAngle,horLinkAngle);
-    
-    sprintf(textBuf, "X: %.1f cm", (endPoint.X*100));
+    sprintf(textBuf, "Z: %.1f cm    ", (endPoint.Z*100));
     BSP_LCD_DisplayStringAt(5, 75, (unsigned char*) textBuf, LEFT_MODE);
-    sprintf(textBuf, "Y: %.1f cm", (endPoint.Y*100));
+    sprintf(textBuf, "A: %.1f mm    ", (pressLength));
     BSP_LCD_DisplayStringAt(5, 90, (unsigned char*) textBuf, LEFT_MODE);
     
     if (((verLinkAngleAfterRefresh != verLinkAngle) || (horLinkAngleAfterRefresh != horLinkAngle) || (turnAngleAfterRefresh != turnAngle)) && (graphicsEna)) {
@@ -1611,7 +1570,8 @@ void StartOldGraphicsTask(void const * argument)
     
     
     
-    osDelay(500);
+    osDelay(100);
+    taskCounterOldGraphicsTask++;
   }
   /* USER CODE END StartOldGraphicsTask */
 }

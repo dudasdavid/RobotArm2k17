@@ -1277,9 +1277,6 @@
     <group>
         <name>Components</name>
         <file>
-            <name>$PROJ_DIR$\..\Components\ili9341\ili9341.c</name>
-        </file>
-        <file>
             <name>$PROJ_DIR$\..\Components\l3gd20\l3gd20.c</name>
         </file>
         <file>
@@ -1292,6 +1289,9 @@
             <name>BSP</name>
             <group>
                 <name>Components</name>
+                <file>
+                    <name>$PROJ_DIR$\..\Drivers\BSP\Components\ili9341\ili9341.c</name>
+                </file>
             </group>
         </group>
         <group>

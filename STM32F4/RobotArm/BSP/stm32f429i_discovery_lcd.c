@@ -124,13 +124,14 @@
   */ 
 //LTDC_HandleTypeDef  hltdc;
 extern LTDC_HandleTypeDef hltdc;
-static DMA2D_HandleTypeDef Dma2dHandler;
+extern DMA2D_HandleTypeDef hdma2d;
 //static RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
 
 /* Default LCD configuration with LCD Layer 1 */
 static uint32_t ActiveLayer = 0;
 static LCD_DrawPropTypeDef DrawProp[MAX_LAYER_NUMBER];
 LCD_DrvTypeDef  *LcdDrv;
+
 /**
   * @}
   */ 
@@ -221,11 +222,11 @@ uint8_t BSP_LCD_Init(void)
     LcdDrv = &ili9341_drv;
 
     /* LCD Init */	 
-    LcdDrv->Init();
+    //LcdDrv->Init();
 
     /* Initialize the SDRAM */
     //BSP_SDRAM_Init();
-    BSP_SDRAM_Initialization_sequence(REFRESH_COUNT);
+    //BSP_SDRAM_Initialization_sequence(REFRESH_COUNT);
 
     /* Initialize the font */
     BSP_LCD_SetFont(&LCD_DEFAULT_FONT);
@@ -239,7 +240,7 @@ uint8_t BSP_LCD_Init(void)
   */
 uint32_t BSP_LCD_GetXSize(void)
 {
-  return LcdDrv->GetLcdPixelWidth();
+  return 240;//LcdDrv->GetLcdPixelWidth();
 }
 
 /**
@@ -248,7 +249,7 @@ uint32_t BSP_LCD_GetXSize(void)
   */
 uint32_t BSP_LCD_GetYSize(void)
 {
-  return LcdDrv->GetLcdPixelHeight();
+  return 320;//LcdDrv->GetLcdPixelHeight();
 }
 
 /**
@@ -572,7 +573,9 @@ uint32_t BSP_LCD_ReadPixel(uint16_t Xpos, uint16_t Ypos)
 void BSP_LCD_Clear(uint32_t Color)
 { 
   /* Clear the LCD */ 
+  //FillBuffer(ActiveLayer, (uint32_t *)(hltdc.LayerCfg[ActiveLayer].FBStartAdress), BSP_LCD_GetXSize(), BSP_LCD_GetYSize(), 0, Color);
   FillBuffer(ActiveLayer, (uint32_t *)(hltdc.LayerCfg[ActiveLayer].FBStartAdress), BSP_LCD_GetXSize(), BSP_LCD_GetYSize(), 0, Color);
+
 }
 
 /**
@@ -1386,21 +1389,21 @@ static void FillBuffer(uint32_t LayerIndex, void * pDst, uint32_t xSize, uint32_
 {
   
   /* Register to memory mode with ARGB8888 as color Mode */ 
-  Dma2dHandler.Init.Mode         = DMA2D_R2M;
-  Dma2dHandler.Init.ColorMode    = DMA2D_ARGB8888;
-  Dma2dHandler.Init.OutputOffset = OffLine;      
+  hdma2d.Init.Mode         = DMA2D_R2M;
+  hdma2d.Init.ColorMode    = DMA2D_ARGB8888;
+  hdma2d.Init.OutputOffset = OffLine;      
   
-  Dma2dHandler.Instance = DMA2D; 
+  hdma2d.Instance = DMA2D; 
   
   /* DMA2D Initialization */
-  if(HAL_DMA2D_Init(&Dma2dHandler) == HAL_OK) 
+  if(HAL_DMA2D_Init(&hdma2d) == HAL_OK) 
   {
-    if(HAL_DMA2D_ConfigLayer(&Dma2dHandler, LayerIndex) == HAL_OK) 
+    if(HAL_DMA2D_ConfigLayer(&hdma2d, LayerIndex) == HAL_OK) 
     {
-      if (HAL_DMA2D_Start(&Dma2dHandler, ColorIndex, (uint32_t)pDst, xSize, ySize) == HAL_OK)
+      if (HAL_DMA2D_Start(&hdma2d, ColorIndex, (uint32_t)pDst, xSize, ySize) == HAL_OK)
       {
         /* Polling For DMA transfer */  
-        HAL_DMA2D_PollForTransfer(&Dma2dHandler, 10);
+        HAL_DMA2D_PollForTransfer(&hdma2d, 10);
       }
     }
   } 
@@ -1416,27 +1419,27 @@ static void FillBuffer(uint32_t LayerIndex, void * pDst, uint32_t xSize, uint32_
 static void ConvertLineToARGB8888(void * pSrc, void * pDst, uint32_t xSize, uint32_t ColorMode)
 {    
   /* Configure the DMA2D Mode, Color Mode and output offset */
-  Dma2dHandler.Init.Mode         = DMA2D_M2M_PFC;
-  Dma2dHandler.Init.ColorMode    = DMA2D_ARGB8888;
-  Dma2dHandler.Init.OutputOffset = 0;     
+  hdma2d.Init.Mode         = DMA2D_M2M_PFC;
+  hdma2d.Init.ColorMode    = DMA2D_ARGB8888;
+  hdma2d.Init.OutputOffset = 0;     
   
   /* Foreground Configuration */
-  Dma2dHandler.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
-  Dma2dHandler.LayerCfg[1].InputAlpha = 0xFF;
-  Dma2dHandler.LayerCfg[1].InputColorMode = ColorMode;
-  Dma2dHandler.LayerCfg[1].InputOffset = 0;
+  hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
+  hdma2d.LayerCfg[1].InputAlpha = 0xFF;
+  hdma2d.LayerCfg[1].InputColorMode = ColorMode;
+  hdma2d.LayerCfg[1].InputOffset = 0;
   
-  Dma2dHandler.Instance = DMA2D; 
+  hdma2d.Instance = DMA2D; 
   
   /* DMA2D Initialization */
-  if(HAL_DMA2D_Init(&Dma2dHandler) == HAL_OK) 
+  if(HAL_DMA2D_Init(&hdma2d) == HAL_OK) 
   {
-    if(HAL_DMA2D_ConfigLayer(&Dma2dHandler, 1) == HAL_OK) 
+    if(HAL_DMA2D_ConfigLayer(&hdma2d, 1) == HAL_OK) 
     {
-      if (HAL_DMA2D_Start(&Dma2dHandler, (uint32_t)pSrc, (uint32_t)pDst, xSize, 1) == HAL_OK)
+      if (HAL_DMA2D_Start(&hdma2d, (uint32_t)pSrc, (uint32_t)pDst, xSize, 1) == HAL_OK)
       {
         /* Polling For DMA transfer */  
-        HAL_DMA2D_PollForTransfer(&Dma2dHandler, 10);
+        HAL_DMA2D_PollForTransfer(&hdma2d, 10);
       }
     }
   } 

@@ -78,7 +78,7 @@
 //static SDRAM_HandleTypeDef hsdram1;
 extern SDRAM_HandleTypeDef hsdram1;
 //static FMC_SDRAM_TimingTypeDef Timing;
-static FMC_SDRAM_CommandTypeDef Command;
+extern FMC_SDRAM_CommandTypeDef Command;
 /**
   * @}
   */ 

@@ -351,6 +351,41 @@
           <state>$PROJ_DIR$/../Drivers/CMSIS/Include</state>
           <state>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Core/Inc</state>
           <state>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc</state>
+          <state>$PROJ_DIR$/../STemWin/Target</state>
+          <state>$PROJ_DIR$/../STemWin/App</state>
+          <state>$PROJ_DIR$/../Drivers/BSP/Components/ili9341</state>
+          <state>$PROJ_DIR$/../Middlewares/ST/STemWin/inc</state>
+          <state>$PROJ_DIR$/../Drivers/BSP/Components/Common</state>
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
+          <state />
           <state />
           <state />
           <state />
@@ -1051,6 +1086,30 @@
     </group>
     <group>
       <name>User</name>
+      <group>
+        <name>STemWin</name>
+        <group>
+          <name>App</name>
+          <file>
+            <name>$PROJ_DIR$\..\STemWin\App\FramewinDLG.c</name>
+          </file>
+          <file>
+            <name>$PROJ_DIR$\..\STemWin\App\GUI_App.c</name>
+          </file>
+        </group>
+        <group>
+          <name>Target</name>
+          <file>
+            <name>$PROJ_DIR$\..\STemWin\Target\GUIConf.c</name>
+          </file>
+          <file>
+            <name>$PROJ_DIR$\..\STemWin\Target\HW_Init.c</name>
+          </file>
+          <file>
+            <name>$PROJ_DIR$\..\STemWin\Target\STemwin_wrapper.c</name>
+          </file>
+        </group>
+      </group>
       <file>
         <name>$PROJ_DIR$\..\Src\freertos.c</name>
       </file>
@@ -1107,9 +1166,6 @@
   <group>
     <name>Components</name>
     <file>
-      <name>$PROJ_DIR$\..\Components\ili9341\ili9341.c</name>
-    </file>
-    <file>
       <name>$PROJ_DIR$\..\Components\l3gd20\l3gd20.c</name>
     </file>
     <file>
@@ -1122,6 +1178,9 @@
       <name>BSP</name>
       <group>
         <name>Components</name>
+        <file>
+          <name>$PROJ_DIR$\..\Drivers\BSP\Components\ili9341\ili9341.c</name>
+        </file>
       </group>
     </group>
     <group>
@@ -1263,6 +1322,15 @@
       </file>
       <file>
         <name>$PROJ_DIR$\..\Middlewares\Third_Party\FreeRTOS\Source\timers.c</name>
+      </file>
+    </group>
+    <group>
+      <name>STemWin</name>
+      <file>
+        <name>$PROJ_DIR$\..\Middlewares\ST\STemWin\OS\GUI_X_OS.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$\..\Middlewares\ST\STemWin\Lib\STemWin540_CM4_OS_IAR_ot_ARGB.a</name>
       </file>
     </group>
     <group>

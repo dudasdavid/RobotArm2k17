@@ -5,7 +5,7 @@
         <stlinkfoundProbes />
     </stlink>
     <DebugChecksum>
-        <Checksum>1044447699</Checksum>
+        <Checksum>4112851144</Checksum>
     </DebugChecksum>
     <Exceptions>
         <StopOnUncaught>_ 0</StopOnUncaught>
@@ -34,11 +34,11 @@
     </Disassembly>
     <SWOTraceHWSettings>
         <OverrideDefaultClocks>0</OverrideDefaultClocks>
-        <CpuClock>180000000</CpuClock>
+        <CpuClock>168000000</CpuClock>
         <ClockAutoDetect>0</ClockAutoDetect>
         <ClockWanted>2000000</ClockWanted>
         <JtagSpeed>2000000</JtagSpeed>
-        <Prescaler>90</Prescaler>
+        <Prescaler>84</Prescaler>
         <TimeStampPrescIndex>0</TimeStampPrescIndex>
         <TimeStampPrescData>0</TimeStampPrescData>
         <PcSampCYCTAP>1</PcSampCYCTAP>
@@ -59,7 +59,7 @@
         <mode>0</mode>
     </Disassemble_mode>
     <StLinkDriver>
-        <stlinkserialNo>67171552</stlinkserialNo>
+        <stlinkserialNo>40250987</stlinkserialNo>
         <stlinkfoundProbes />
         <CStepIntDis>_ 0</CStepIntDis>
         <LeaveTargetRunning>_ 0</LeaveTargetRunning>
