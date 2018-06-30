@@ -351,56 +351,9 @@
           <state>$PROJ_DIR$/../Drivers/CMSIS/Include</state>
           <state>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Core/Inc</state>
           <state>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc</state>
-          <state>$PROJ_DIR$/../STemWin/Target</state>
-          <state>$PROJ_DIR$/../STemWin/App</state>
           <state>$PROJ_DIR$/../Drivers/BSP/Components/ili9341</state>
           <state>$PROJ_DIR$/../Middlewares/ST/STemWin/inc</state>
           <state>$PROJ_DIR$/../Drivers/BSP/Components/Common</state>
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
-          <state />
         </option>
         <option>
           <name>CCStdIncCheck</name>
@@ -1094,19 +1047,7 @@
             <name>$PROJ_DIR$\..\STemWin\App\FramewinDLG.c</name>
           </file>
           <file>
-            <name>$PROJ_DIR$\..\STemWin\App\GUI_App.c</name>
-          </file>
-        </group>
-        <group>
-          <name>Target</name>
-          <file>
-            <name>$PROJ_DIR$\..\STemWin\Target\GUIConf.c</name>
-          </file>
-          <file>
-            <name>$PROJ_DIR$\..\STemWin\Target\HW_Init.c</name>
-          </file>
-          <file>
-            <name>$PROJ_DIR$\..\STemWin\Target\STemwin_wrapper.c</name>
+            <name>$PROJ_DIR$/../STemWin/App/FramewinDLG.c</name>
           </file>
         </group>
       </group>
@@ -1139,6 +1080,45 @@
       </file>
       <file>
         <name>$PROJ_DIR$\..\Src\usbd_desc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/main.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/freertos.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/GUIConf.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/HW_Init.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/GUI_App.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/STemwin_wrapper.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/usb_device.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/usbd_conf.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/usbd_desc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/usbd_cdc_if.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/stm32f4xx_it.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/stm32f4xx_hal_msp.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Src/stm32f4xx_hal_timebase_TIM.c</name>
       </file>
     </group>
   </group>
@@ -1180,6 +1160,9 @@
         <name>Components</name>
         <file>
           <name>$PROJ_DIR$\..\Drivers\BSP\Components\ili9341\ili9341.c</name>
+        </file>
+        <file>
+          <name>$PROJ_DIR$/../Drivers/BSP/Components/ili9341/ili9341.c</name>
         </file>
       </group>
     </group>
@@ -1287,6 +1270,99 @@
       <file>
         <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_ll_usb.c</name>
       </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma2d.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_fmc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sdram.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_ltdc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_ltdc_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dsi.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pcd.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pcd_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_usb.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rng.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c</name>
+      </file>
     </group>
   </group>
   <group>
@@ -1323,6 +1399,36 @@
       <file>
         <name>$PROJ_DIR$\..\Middlewares\Third_Party\FreeRTOS\Source\timers.c</name>
       </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/portable/IAR/ARM_CM4F/port.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/portable/IAR/ARM_CM4F/portasm.s</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/croutine.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/event_groups.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/list.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/queue.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/tasks.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/timers.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c</name>
+      </file>
     </group>
     <group>
       <name>STemWin</name>
@@ -1330,7 +1436,10 @@
         <name>$PROJ_DIR$\..\Middlewares\ST\STemWin\OS\GUI_X_OS.c</name>
       </file>
       <file>
-        <name>$PROJ_DIR$\..\Middlewares\ST\STemWin\Lib\STemWin540_CM4_OS_IAR_ot_ARGB.a</name>
+        <name>$PROJ_DIR$/../Middlewares/ST/STemWin/OS/GUI_X_OS.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/ST/STemWin/Lib/STemWin540_CM4_OS_IAR_ARGB.a</name>
       </file>
     </group>
     <group>
@@ -1346,6 +1455,18 @@
       </file>
       <file>
         <name>$PROJ_DIR$\..\Middlewares\ST\STM32_USB_Device_Library\Core\Src\usbd_ioreq.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</name>
       </file>
     </group>
   </group>

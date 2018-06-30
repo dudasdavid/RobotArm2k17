@@ -58,7 +58,7 @@
 #include "ili9341.h"
 #include "HW_Init.h"
 #include "GUI_App.h"
-#include "STemWin_wrapper.h"
+#include "STemwin_wrapper.h"
 
 /* USER CODE BEGIN Includes */
 

@@ -160,8 +160,6 @@ static volatile float servo3Max = 8.3;
 static volatile float servo4Max = 12.5;//11.3
 static volatile float servo5Max = 10;
 
-
-
 static volatile float servo1StepSize = 0.014;
 static volatile float servo2StepSize = 0.024;
 static volatile float servo3StepSize = 0.024;
@@ -173,7 +171,7 @@ static volatile int cycleRepeat = 0;
 static volatile int graphicsEna =1;
 
 char txBuf[30];
-char rxBuf[20];
+char rxBuf[64];
 uint8_t receiveState = 0;
 
 Point verLinkPoints[4];
@@ -189,6 +187,9 @@ static volatile uint32_t val[3];
 static volatile float pressLength = 0;
 
 static volatile int PenControlActive = 0;
+
+static volatile float targetStepSizeVar = 0.04;//0.024; // 1 deg/s = 0.00588
+static volatile float numberOfSteps = 0;
 
 static uint32_t TSx = 0, TSy = 0;
 
@@ -1034,28 +1035,15 @@ void StartCommTask(void const * argument)
   uint16_t Len = 0;
   //strcpy(txBuf, "echo: ");
   
-  static int16_t turnValue = 100;
-  static int16_t xPosValue = 100;
-  static int16_t yPosValue = 100;
-  static int16_t gripperValue = 100;
+  int16_t xAxisValue = 0;
+  int16_t yAxisValue = 100;
+  int16_t zAxisValue = 100;
   
-  static int16_t xAxisValue = 0;
-  static int16_t yAxisValue = 100;
-  static int16_t zAxisValue = 100;
-  static int16_t aAxisValue = 100;
+  float xAxisCm = 0;
+  float yAxisCm = 0;
+  float zAxisCm = 0;
   
-  static float xPoscm = 0;
-  static float yPoscm = 0;
-  
-  static float xAxisCm = 0;
-  static float yAxisCm = 0;
-  static float zAxisCm = 0;
-  
-  static volatile float targetStepSizeVar = 0.024; // 1 deg/s = 0.00588
-  static float numberOfSteps = 0;
-
-  static JointAngles finalJointAngles;
-  static JointAngles3Axis finalJointAngles3Axis;
+  JointAngles3Axis finalJointAngles3Axis;
   
   //uint16_t servo1ComPosRef = 75;
   /* Infinite loop */
@@ -1063,50 +1051,7 @@ void StartCommTask(void const * argument)
   {
     BSP_LED_Toggle(LED3);
     if (receiveState == 1){
-
-      if ( (rxBuf[0] == 'S') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == ';') && (rxBuf[16] == '\r')) { // check the frame
-      
-        turnValue = (int16_t)((rxBuf[1]  - '0')*100 + (rxBuf[2]  - '0')*10 + (rxBuf[3]  - '0')*1);
-        xPosValue = (int16_t)((rxBuf[5]  - '0')*100 + (rxBuf[6]  - '0')*10 + (rxBuf[7]  - '0')*1);
-        yPosValue = (int16_t)((rxBuf[9]  - '0')*100 + (rxBuf[10]  - '0')*10 + (rxBuf[11]  - '0')*1);
-        gripperValue = (int16_t)((rxBuf[13]  - '0')*100 + (rxBuf[14]  - '0')*10 + (rxBuf[15]  - '0')*1);
-          
-        xPoscm = ((float)xPosValue)/10.0;
-        yPoscm = (((float)yPosValue)-50)/10.0;
-        
-        if (cycleRepeat == 0){
-        
-          finalJointAngles = calculateInverseKinematics(xPoscm/100.0,yPoscm/100.0);
-          servo3NewPosRef = deg2dc(finalJointAngles.joint1Angle);
-          servo2NewPosRef = deg2dc(finalJointAngles.joint2angle);
-          servo1NewPosRef = receivedTurn2dc(turnValue);
-          servo4NewPosRef = receivedGrip2dc(gripperValue);
-          
-          if ((absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo2NewPosRef-servo2CurrPos)) && (absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
-            servo3StepSize = targetStepSizeVar;
-            numberOfSteps = absfloat(servo3NewPosRef-servo3CurrPos)/targetStepSizeVar;
-            servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
-            servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
-          }
-          else if ((absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo3NewPosRef-servo3CurrPos)) && (absfloat(servo2NewPosRef-servo2CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
-            servo2StepSize = targetStepSizeVar;
-            numberOfSteps = absfloat(servo2NewPosRef-servo2CurrPos)/targetStepSizeVar;
-            servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
-            servo1StepSize = absfloat(servo1NewPosRef-servo1CurrPos)/numberOfSteps;
-          }
-          else{
-            servo1StepSize = targetStepSizeVar;
-            numberOfSteps = absfloat(servo1NewPosRef-servo1CurrPos)/targetStepSizeVar;
-            servo3StepSize = absfloat(servo3NewPosRef-servo3CurrPos)/numberOfSteps;
-            servo2StepSize = absfloat(servo2NewPosRef-servo2CurrPos)/numberOfSteps;
-          }
-        }
-        
-        sprintf(txBuf, "OK: %s\r", rxBuf);
-        Len = SizeofCharArray((char*)txBuf);
-        CDC_Transmit_HS((uint8_t*)txBuf, Len);
-      }
-      else if ((rxBuf[0] == 'P') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == '\r')){//&& (rxBuf[12] == ';') && (rxBuf[16] == '\r')){
+      if ((rxBuf[0] == 'P') && (rxBuf[4] == ';') && (rxBuf[8] == ';') && (rxBuf[12] == '\r')){//&& (rxBuf[12] == ';') && (rxBuf[16] == '\r')){
         xAxisValue = (int16_t)((rxBuf[1]  - '0')*100 + (rxBuf[2]  - '0')*10 + (rxBuf[3]  - '0')*1);
         yAxisValue = (int16_t)((rxBuf[5]  - '0')*100 + (rxBuf[6]  - '0')*10 + (rxBuf[7]  - '0')*1);
         zAxisValue = (int16_t)((rxBuf[9]  - '0')*100 + (rxBuf[10]  - '0')*10 + (rxBuf[11]  - '0')*1);
@@ -1122,7 +1067,6 @@ void StartCommTask(void const * argument)
           servo2NewPosRef = deg2dc(finalJointAngles3Axis.jointYAngle);
           servo1NewPosRef = xRotate2dc(finalJointAngles3Axis.jointXAngle);
           servo4NewPosRef = gripRotate2dc(finalJointAngles3Axis.jointXAngle);
-          targetStepSizeVar = 0.024;
           
           if ((absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo2NewPosRef-servo2CurrPos)) && (absfloat(servo3NewPosRef-servo3CurrPos) > absfloat(servo1NewPosRef-servo1CurrPos))){
             servo3StepSize = targetStepSizeVar;
@@ -1152,6 +1096,15 @@ void StartCommTask(void const * argument)
       }
       else if ((rxBuf[0] == 'P') && (rxBuf[1] == 'E') && (rxBuf[2] == 'N') && (rxBuf[4] == '\r')){
         PenControlActive = (int16_t)(rxBuf[3]  - '0');
+        sprintf(txBuf, "OK: %s\r", rxBuf);
+        Len = SizeofCharArray((char*)txBuf);
+        CDC_Transmit_HS((uint8_t*)txBuf, Len);
+      }
+      else if ((rxBuf[0] == 'D') && (rxBuf[1] == 'Y') && (rxBuf[2] == 'N') && (rxBuf[4] == '\r')){
+        targetStepSizeVar = (int16_t)(rxBuf[3]  - '0') * 0.01;
+        sprintf(txBuf, "OK: %s\r", rxBuf);
+        Len = SizeofCharArray((char*)txBuf);
+        CDC_Transmit_HS((uint8_t*)txBuf, Len);
       }
       else{
         sprintf(txBuf, "ERR: %s\r", rxBuf);
